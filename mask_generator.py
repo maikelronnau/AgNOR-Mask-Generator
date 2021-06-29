@@ -123,7 +123,7 @@ def main():
         "--debug",
         help="Enable or disable debug mode.",
         default=False,
-        type=bool)
+        action="store_true")
 
     args = parser.parse_args()
 
@@ -147,15 +147,35 @@ def main():
             ]
         ]
 
-        if "icon.ico" in glob.glob("icon.ico"):
-            icon = os.path.join(".", "icon.ico")
-            logging.info(f"""Loading icon from local directory""")
+        # if "icon.ico" in glob.glob("icon.ico"):
+        #     icon = os.path.join(".", "icon.ico")
+        #     logging.info(f"""Loading icon from local directory""")
+        # else:
+        #     icon = os.path.join(sys._MEIPASS, "icon.ico")
+        #     logging.info(f"""Loading icon from sys directory""")
+
+        icon_paths = [icon_path for icon_path in Path(__file__).parent.rglob("icon.ico")]
+        logging.info(f"Icons found: {icon_paths}")
+
+        if icon_paths[0].is_file():
+            icon = str(icon_paths[0])
+            logging.info(f"Loading icon from '{icon}'")
         else:
-            icon = os.path.join(sys._MEIPASS, "icon.ico")
-            logging.info(f"""Loading icon from sys directory""")
+            logging.warning("Did not find 'icon.ico'.")
+            logging.warning("Program will start without it.")
+            icon = None
 
         logging.info(f"""Create window""")
-        window = sg.Window("Mask Generator", layout, finalize=True, icon=icon)
+        try:
+            if icon:
+                window = sg.Window("Mask Generator", layout, finalize=True, icon=icon)
+            else:
+                window = sg.Window("Mask Generator", layout, finalize=True)
+        except Exception as e:
+            logging.info(f"Could not load found icon.")
+            window = sg.Window("Mask Generator", layout, finalize=True)
+            logging.warning("Program will start without it.")
+
         status = window["-STATUS-"]
         update_status = True
 
@@ -163,15 +183,36 @@ def main():
         supported_types = [".tif", ".tiff", ".png", ".jpg", ".jpeg"]
 
         # Load models
-        if "nucleus.h5" in glob.glob("*.h5") and "nor.h5" in glob.glob("*.h5"):
-            models_base_path = "."
-            logging.info(f"""Loading models locally""")
-        else:
-            models_base_path = sys._MEIPASS
-            logging.info(f"""Loading models from sys""")
+        # if "nucleus.h5" in glob.glob("*.h5") and "nor.h5" in glob.glob("*.h5"):
+        #     models_base_path = "."
+        #     logging.info(f"""Loading models locally""")
+        # else:
+        #     models_base_path = sys._MEIPASS
+        #     logging.info(f"""Loading models from sys""")
 
-        nuclei_model = keras.models.load_model(os.path.join(models_base_path, "nucleus.h5"), custom_objects={"dice_coef_loss": dice_coef_loss, "dice_coef": dice_coef})
-        nors_model = keras.models.load_model(os.path.join(models_base_path, "nor.h5"), custom_objects={"dice_coef_loss": dice_coef_loss, "dice_coef": dice_coef})
+        nucleus_paths = [nucleus_path for nucleus_path in Path(__file__).parent.rglob("nucleus.h5")]
+        nor_paths = [nor_path for nor_path in Path(__file__).parent.rglob("nor.h5")]
+
+        logging.info("Models found:")
+        logging.info(f"Nucleus: {nucleus_paths}")
+        logging.info(f"NOR: {nor_paths}")
+
+        if nucleus_paths[0].is_file():
+            nucleus_model_path = str(nucleus_paths[0])
+            logging.info(f"Loading nucleus model from '{nucleus_model_path}'")
+        else:
+            logging.error("Did not find 'nucleus.h5'.")
+            raise Exception("Could not load 'nucleus.h5' model.")
+
+        if nor_paths[0].is_file():
+            nor_model_path = str(nor_paths[0])
+            logging.info(f"Loading NOR model from '{nor_model_path}'")
+        else:
+            logging.error("Did not find 'nor.h5'.")
+            raise Exception("Could not load 'nor.h5' model.")
+        
+        nuclei_model = keras.models.load_model(str(nucleus_model_path), custom_objects={"dice_coef_loss": dice_coef_loss, "dice_coef": dice_coef})
+        nors_model = keras.models.load_model(str(nor_model_path), custom_objects={"dice_coef_loss": dice_coef_loss, "dice_coef": dice_coef})
         logging.info(f"""Models loaded""")
 
         input_shape_nuclei = nuclei_model.input_shape[1:]
@@ -187,7 +228,7 @@ def main():
         image_tensor_nors = np.empty((1, height_nors, width_nors, channels_nors))
 
         logging.info(f"""List local files""")
-        for file_name in [path for path in Path(".").rglob("*.*")]:
+        for file_name in [path for path in Path(__file__).parent.rglob("*.*")]:
             logging.info(f"""{str(file_name)}""")
         logging.info(f"""Finished listing local files""")
 
