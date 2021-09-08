@@ -1,42 +1,46 @@
 import argparse
-import glob
 import json
 import logging
 import os
 import shutil
-import sys
 import time
 from pathlib import Path
 
 import cv2
 import numpy as np
 import PySimpleGUI as sg
-from tensorflow import keras
+import tensorflow as tf
 
-from utils import dice_coef, dice_coef_loss, filter_contours, smooth_contours
+from utils import CUSTOM_OBJECTS, filter_contours, smooth_contours
 
 
-def save_annotation(nuclei_prediction, nors_prediction, annotation_directory, name, original_shape):
+def save_annotation(prediction, annotation_directory, name, original_shape, m_objective, m_eyepiece):
     logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
     width = original_shape[0]
     height = original_shape[1]
 
-    nuclei_prediction = cv2.resize(nuclei_prediction, (width, height))
-    nuclei_prediction[nuclei_prediction < 0.5] = 0
-    nuclei_prediction[nuclei_prediction >= 0.5] = 255
+    prediction = cv2.resize(prediction, (width, height))
+    prediction[:, :, 0] = np.where(
+        np.logical_and(prediction[:, :, 0] > prediction[:, :, 1], prediction[:, :, 0] > prediction[:, :, 2]), 255, 0)
+    prediction[:, :, 1] = np.where(
+        np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 255, 0)
+    prediction[:, :, 2] = np.where(
+        np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 255, 0)
 
-    nors_prediction = cv2.resize(nors_prediction, (width, height))
-    nors_prediction[nors_prediction < 0.5] = 0
-    nors_prediction[nors_prediction >= 0.5] = 255
+    nuclei_prediction = prediction[:, :, 1].astype(np.uint8)
+    nors_prediction = prediction[:, :, 2].astype(np.uint8)
 
     annotation = {
         "version": "4.5.7",
         "flags": {},
         "shapes": [],
-        "imagePath": os.path.basename(name),
-        "imageData": None,
         "imageHeight": height,
-        "imageWidth": width
+        "imageWidth": width,
+        "m_objective": m_objective,
+        "m_eyepiece": m_eyepiece,
+        "magnification": m_objective * m_eyepiece,
+        "imagePath": os.path.basename(name),
+        "imageData": None
     }
 
     logging.info(f"""Find nuclei contours""")
@@ -132,27 +136,34 @@ def main():
 
     try:
         logging.info(f"""Starting""")
-
         logging.info(f"""Setting theme""")
-        # Consturct UI
+
         sg.theme("DarkBlue")
+        main_font = ("Arial", "10", "bold")
+        secondary_font = ("Arial", "10")
+
+        # Consturct UI
         layout = [
             [
-                sg.Text("Image Folder", text_color="white"),
+                sg.Text("Maginification", text_color="white", font=main_font)
+            ],
+            [
+                sg.Text("   - Objective:  ", text_color="white", font=secondary_font),
+                sg.InputText(size=(10, 1), key="-OBJECTIVE-")
+            ],
+            [
+                sg.Text("   - Eyepiece:  ", text_color="white", font=secondary_font),
+                sg.InputText(size=(10, 1), key="-EYEPIECE-"),
+            ],
+            [
+                sg.Text("Image Folder", text_color="white", font=main_font),
                 sg.In(size=(50, 1), enable_events=True, key="-FOLDER-"),
                 sg.FolderBrowse(),
             ],
             [
-                sg.Text("Status: waiting" + " " * 30, text_color="white", key="-STATUS-"),
+                sg.Text("Status: waiting" + " " * 30, text_color="white", key="-STATUS-", font=secondary_font),
             ]
         ]
-
-        # if "icon.ico" in glob.glob("icon.ico"):
-        #     icon = os.path.join(".", "icon.ico")
-        #     logging.info(f"""Loading icon from local directory""")
-        # else:
-        #     icon = os.path.join(sys._MEIPASS, "icon.ico")
-        #     logging.info(f"""Loading icon from sys directory""")
 
         icon_paths = [icon_path for icon_path in Path(__file__).parent.rglob("icon.ico")]
         logging.info(f"Icons found: {icon_paths}")
@@ -182,50 +193,27 @@ def main():
         # Prediction settings
         supported_types = [".tif", ".tiff", ".png", ".jpg", ".jpeg"]
 
-        # Load models
-        # if "nucleus.h5" in glob.glob("*.h5") and "nor.h5" in glob.glob("*.h5"):
-        #     models_base_path = "."
-        #     logging.info(f"""Loading models locally""")
-        # else:
-        #     models_base_path = sys._MEIPASS
-        #     logging.info(f"""Loading models from sys""")
+        models_paths = [models_path for models_path in Path(__file__).parent.rglob("AgNOR_e030_l0.0782_vl0.2396.h5")]
 
-        nucleus_paths = [nucleus_path for nucleus_path in Path(__file__).parent.rglob("nucleus.h5")]
-        nor_paths = [nor_path for nor_path in Path(__file__).parent.rglob("nor.h5")]
+        logging.info("Model(s) found:")
+        logging.info(f"{models_paths}")
 
-        logging.info("Models found:")
-        logging.info(f"Nucleus: {nucleus_paths}")
-        logging.info(f"NOR: {nor_paths}")
-
-        if nucleus_paths[0].is_file():
-            nucleus_model_path = str(nucleus_paths[0])
-            logging.info(f"Loading nucleus model from '{nucleus_model_path}'")
+        if models_paths[0].is_file():
+            model_path = str(models_paths[0])
+            logging.info(f"Loading model from '{model_path}'")
         else:
-            logging.error("Did not find 'nucleus.h5'.")
-            raise Exception("Could not load 'nucleus.h5' model.")
+            logging.error("Did not find a file corresponding to a model.")
+            raise Exception(f"Could not load '{models_paths[0]}' model.")
 
-        if nor_paths[0].is_file():
-            nor_model_path = str(nor_paths[0])
-            logging.info(f"Loading NOR model from '{nor_model_path}'")
-        else:
-            logging.error("Did not find 'nor.h5'.")
-            raise Exception("Could not load 'nor.h5' model.")
-        
-        nuclei_model = keras.models.load_model(str(nucleus_model_path), custom_objects={"dice_coef_loss": dice_coef_loss, "dice_coef": dice_coef})
-        nors_model = keras.models.load_model(str(nor_model_path), custom_objects={"dice_coef_loss": dice_coef_loss, "dice_coef": dice_coef})
-        logging.info(f"""Models loaded""")
+        model = tf.keras.models.load_model(str(model_path), custom_objects=CUSTOM_OBJECTS)
+        logging.info(f"""Model loaded""")
 
-        input_shape_nuclei = nuclei_model.input_shape[1:]
-        logging.info(f"""Nuclei input shape: {input_shape_nuclei}""")
-        input_shape_nors = nors_model.input_shape[1:]
-        logging.info(f"""NOR input shape: {input_shape_nors}""")
+        input_shape = model.input_shape[1:]
+        logging.info(f"""Nuclei input shape: {input_shape}""")
 
         # Prepare tensor
-        height_nuclei, width_nuclei, channels_nuclei = input_shape_nuclei
-        height_nors, width_nors, channels_nors = input_shape_nors
-
-        image_tensor_nuclei = np.empty((1, height_nuclei, width_nuclei, channels_nuclei))
-        image_tensor_nors = np.empty((1, height_nors, width_nors, channels_nors))
+        height, width, channels = input_shape
+        image_tensor = np.empty((1, height, width, channels))
 
         logging.info(f"""List local files""")
         for file_name in [path for path in Path(__file__).parent.rglob("*.*")]:
@@ -241,6 +229,14 @@ def main():
             if values["-FOLDER-"] == "":
                 logging.info(f"""Browse was used without a directory being selected""")
                 continue
+            if values["-OBJECTIVE-"] == "":
+                logging.info(f"""Browse was used without 'Objective' being set""")
+                status.update("Status: insert the magnification")
+                continue
+            if values["-EYEPIECE-"] == "":
+                logging.info(f"""Browse was used without 'Eyepiece' being set""")
+                status.update("Status: insert the magnification")
+                continue
 
             # Folder name was filled in, make a list of files in the folder
             if event == "-FOLDER-":
@@ -252,6 +248,15 @@ def main():
                 if len(images) == 0:
                     status.update("Status: no images found!")
                     logging.info(f"""No images were found""")
+                    continue
+
+                try:
+                    m_objective = int(values["-OBJECTIVE-"])
+                    m_eyepiece = int(values["-EYEPIECE-"])
+                except Exception as e:
+                    logging.warning("Maginifcation information could not be converted to numberical values.")
+                    logging.exception(e)
+                    status.update("Status: review magnifications")
                     continue
 
                 logging.info(f"""Total of {len(images)} found""")
@@ -273,35 +278,40 @@ def main():
                     if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
                         if not i + 1 == len(images):
                             window["-FOLDER-"]("")
+                            window["-OBJECTIVE-"]("")
+                            window["-EYEPIECE-"]("")
                             status.update("Status: canceled by the user")
                             update_status = False
                             break
 
                     image_path = str(image_path)
                     image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                    image = tf.cast(image, dtype=tf.float32)
+                    image = image / 255.
+
                     logging.info(f"""Shape {image.shape}""")
                     original_shape = image.shape[:2][::-1]
 
-                    image_nuclei = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
-                    image_nuclei = cv2.resize(image_nuclei, (width_nuclei, height_nuclei))
-                    image_tensor_nuclei[0, :, :, :] = image_nuclei
+                    image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
+                    image = cv2.resize(image, (width, height))
+                    image_tensor[0, :, :, :] = image
 
-                    image_nors = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
-                    image_nors = cv2.resize(image_nors, (width_nors, height_nors))
-                    image_tensor_nors[0, :, :, :] = image_nors
+                    logging.info(f"""Predict""")
+                    prediction = model.predict_on_batch(image_tensor)[0]
 
-                    logging.info(f"""Predict nuclei""")
-                    nuclei_prediction = nuclei_model.predict_on_batch(image_tensor_nuclei)
-                    logging.info(f"""Predict NORs""")
-                    nors_prediction = nors_model.predict_on_batch(image_tensor_nors)
+                    prediction[:, :, 0] = np.where(np.logical_and(prediction[:, :, 0] > prediction[:, :, 1], prediction[:, :, 0] > prediction[:, :, 2]), 127, 0)
+                    prediction[:, :, 1] = np.where(np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 127, 0)
+                    prediction[:, :, 2] = np.where(np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 127, 0)
 
-                    save_annotation(nuclei_prediction[0], nors_prediction[0], annotation_directory, image_path, original_shape)
-                    keras.backend.clear_session()
+                    save_annotation(prediction, annotation_directory, image_path, original_shape, m_objective, m_eyepiece)
+                    tf.keras.backend.clear_session()
                     logging.info(f"""Done processing image {str(image_path)}""")
 
             if update_status:
                 status.update("Status: done!")
                 window["-FOLDER-"]("")
+                window["-OBJECTIVE-"]("")
+                window["-EYEPIECE-"]("")
             else:
                 update_status = True
             logging.info(f"""Selected directory event end""")

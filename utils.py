@@ -1,17 +1,15 @@
 import cv2
 import numpy as np
+import segmentation_models as sm
 from scipy.interpolate import splev, splprep
 
 
-def dice_coef(y_true, y_pred, smooth=1.):
-    intersection = K.sum(y_true * y_pred, axis=[1,2,3])
-    union = K.sum(y_true, axis=[1,2,3]) + K.sum(y_pred, axis=[1,2,3])
-    return K.mean((2. * intersection + smooth) / (union + smooth), axis=0)
-
-
-def dice_coef_loss(y_true, y_pred):
-    return 1-dice_coef(y_true, y_pred)
-
+CUSTOM_OBJECTS = {
+    "categorical_crossentropy_plus_dice_loss": sm.losses.cce_dice_loss,
+    "focal_loss_plus_dice_loss": sm.losses.categorical_focal_dice_loss,
+    "f1-score": sm.metrics.f1_score,
+    "iou_score": sm.metrics.iou_score,
+}
 
 def filter_contours(contours, min_area=5000, max_area=40000):
     filtered_contours = []
