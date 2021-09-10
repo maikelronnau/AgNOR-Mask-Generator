@@ -14,7 +14,7 @@ import tensorflow as tf
 from utils import CUSTOM_OBJECTS, filter_contours, smooth_contours
 
 
-def save_annotation(prediction, annotation_directory, name, original_shape, m_objective, m_eyepiece):
+def save_annotation(prediction, annotation_directory, name, original_shape, magnification):
     logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
     width = original_shape[0]
     height = original_shape[1]
@@ -36,9 +36,7 @@ def save_annotation(prediction, annotation_directory, name, original_shape, m_ob
         "shapes": [],
         "imageHeight": height,
         "imageWidth": width,
-        "m_objective": m_objective,
-        "m_eyepiece": m_eyepiece,
-        "magnification": m_objective * m_eyepiece,
+        "magnification": magnification,
         "imagePath": os.path.basename(name),
         "imageData": None
     }
@@ -145,18 +143,11 @@ def main():
         # Consturct UI
         layout = [
             [
-                sg.Text("Maginification", text_color="white", font=main_font)
+                sg.Text("Maginification", text_color="white", font=main_font),
+                sg.InputText(size=(10, 1), key="-MAGNIFICATION-")
             ],
             [
-                sg.Text("   - Objective:  ", text_color="white", font=secondary_font),
-                sg.InputText(size=(10, 1), key="-OBJECTIVE-")
-            ],
-            [
-                sg.Text("   - Eyepiece:  ", text_color="white", font=secondary_font),
-                sg.InputText(size=(10, 1), key="-EYEPIECE-"),
-            ],
-            [
-                sg.Text("Image Folder", text_color="white", font=main_font),
+                sg.Text("Image Folder ", text_color="white", font=main_font),
                 sg.In(size=(50, 1), enable_events=True, key="-FOLDER-"),
                 sg.FolderBrowse(),
             ],
@@ -229,12 +220,8 @@ def main():
             if values["-FOLDER-"] == "":
                 logging.info(f"""Browse was used without a directory being selected""")
                 continue
-            if values["-OBJECTIVE-"] == "":
-                logging.info(f"""Browse was used without 'Objective' being set""")
-                status.update("Status: insert the magnification")
-                continue
-            if values["-EYEPIECE-"] == "":
-                logging.info(f"""Browse was used without 'Eyepiece' being set""")
+            if values["-MAGNIFICATION-"] == "":
+                logging.info(f"""Browse was used without 'Magnification' being set""")
                 status.update("Status: insert the magnification")
                 continue
 
@@ -251,12 +238,11 @@ def main():
                     continue
 
                 try:
-                    m_objective = int(values["-OBJECTIVE-"])
-                    m_eyepiece = int(values["-EYEPIECE-"])
+                    magnification = int(values["-MAGNIFICATION-"])
                 except Exception as e:
                     logging.warning("Maginifcation information could not be converted to numberical values.")
                     logging.exception(e)
-                    status.update("Status: review magnifications")
+                    status.update("Status: review magnification")
                     continue
 
                 logging.info(f"""Total of {len(images)} found""")
@@ -278,8 +264,7 @@ def main():
                     if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
                         if not i + 1 == len(images):
                             window["-FOLDER-"]("")
-                            window["-OBJECTIVE-"]("")
-                            window["-EYEPIECE-"]("")
+                            window["-MAGNIFICATION-"]("")
                             status.update("Status: canceled by the user")
                             update_status = False
                             break
@@ -303,15 +288,14 @@ def main():
                     prediction[:, :, 1] = np.where(np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 127, 0)
                     prediction[:, :, 2] = np.where(np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 127, 0)
 
-                    save_annotation(prediction, annotation_directory, image_path, original_shape, m_objective, m_eyepiece)
+                    save_annotation(prediction, annotation_directory, image_path, original_shape, magnification)
                     tf.keras.backend.clear_session()
                     logging.info(f"""Done processing image {str(image_path)}""")
 
             if update_status:
                 status.update("Status: done!")
                 window["-FOLDER-"]("")
-                window["-OBJECTIVE-"]("")
-                window["-EYEPIECE-"]("")
+                window["-MAGNIFICATION-"]("")
             else:
                 update_status = True
             logging.info(f"""Selected directory event end""")
