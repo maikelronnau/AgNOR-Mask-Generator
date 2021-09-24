@@ -47,12 +47,12 @@ def save_annotation(prediction, annotation_directory, name, original_shape, magn
     logging.info(f"""Filter nuclei contours""")
     nuclei_polygons = filter_contours(nuclei_polygons)
     logging.info(f"""Smooth nuclei contours""")
-    nuclei_polygons = smooth_contours(nuclei_polygons)
+    nuclei_polygons = smooth_contours(nuclei_polygons, points=40)
 
     logging.info(f"""Find NORs contours""")
     nors_polygons, _ = cv2.findContours(nors_prediction.astype("uint8"), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     logging.info(f"""Smooth NORs contours""")
-    nors_polygons = smooth_contours(nors_polygons)
+    nors_polygons = smooth_contours(nors_polygons, points=20)
 
     logging.info(f"""Filter out nuclei without nors""")
     filtered_nuclei = []

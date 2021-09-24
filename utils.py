@@ -23,7 +23,7 @@ def filter_contours(contours, min_area=5000, max_area=40000):
     return filtered_contours
 
 
-def smooth_contours(contours):
+def smooth_contours(contours, points=30):
     smoothened_contours = []
     for contour in contours:
         try:
@@ -35,10 +35,10 @@ def smooth_contours(contours):
 
             # Find the B-spline representation of an N-dimensional curve.
             # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splprep.html
-            tck, u = splprep([x,y], u=None, s=1.0, per=1)
+            tck, u = splprep([x, y], u=None, s=1.0, per=1, k=1)
 
             # https://docs.scipy.org/doc/numpy-1.10.1/reference/generated/numpy.linspace.html
-            u_new = np.linspace(u.min(), u.max(), 30)
+            u_new = np.linspace(u.min(), u.max(), points)
 
             # Given the knots and coefficients of a B-spline representation, evaluate the value of the smoothing polynomial and its derivatives.
             # https://docs.scipy.org/doc/scipy-0.14.0/reference/generated/scipy.interpolate.splev.html
