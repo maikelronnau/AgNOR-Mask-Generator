@@ -14,7 +14,7 @@ import tensorflow as tf
 from utils import CUSTOM_OBJECTS, filter_contours, smooth_contours
 
 
-def save_annotation(prediction, annotation_directory, name, original_shape, magnification):
+def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification):
     logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
     width = original_shape[0]
     height = original_shape[1]
@@ -36,6 +36,7 @@ def save_annotation(prediction, annotation_directory, name, original_shape, magn
         "shapes": [],
         "imageHeight": height,
         "imageWidth": width,
+        "id": id,
         "magnification": magnification,
         "imagePath": os.path.basename(name),
         "imageData": None
@@ -143,16 +144,24 @@ def main():
         # Consturct UI
         layout = [
             [
-                sg.Text("Maginification", text_color="white", font=main_font),
-                sg.InputText(size=(10, 1), key="-MAGNIFICATION-")
+                sg.Text(f"{' ' * 19}ID\t", text_color="white", font=main_font),
+                sg.InputText(size=(30, 1), key="-ID-")
             ],
             [
-                sg.Text("Image Folder ", text_color="white", font=main_font),
-                sg.In(size=(50, 1), enable_events=True, key="-FOLDER-"),
-                sg.FolderBrowse(),
+                sg.Text("Maginification\t", text_color="white", font=main_font),
+                sg.InputText(size=(30, 1), key="-MAGNIFICATION-")
+            ],
+            [
+                sg.Text("Image Folder\t", text_color="white", font=main_font),
+                sg.In(size=(70, 1), enable_events=True, key="-FOLDER-"),
+                sg.FolderBrowse()
             ],
             [
                 sg.Text("Status: waiting" + " " * 30, text_color="white", key="-STATUS-", font=secondary_font),
+            ],
+            [
+                sg.Cancel(size=(10, 1), pad=((502, 0), (10, 0)), key="-CANCEL-"),
+                sg.Ok(size=(10, 1), pad=((10, 0), (10, 0)), font=main_font, key="-OK-")
             ]
         ]
 
@@ -184,7 +193,7 @@ def main():
         # Prediction settings
         supported_types = [".tif", ".tiff", ".png", ".jpg", ".jpeg"]
 
-        models_paths = [models_path for models_path in Path(__file__).parent.rglob("AgNOR_e030_l0.0782_vl0.2396.h5")]
+        models_paths = [models_path for models_path in Path(__file__).parent.rglob("AgNOR_e087_l0.0273_vl0.1332.h5")]
 
         logging.info("Model(s) found:")
         logging.info(f"{models_paths}")
@@ -217,16 +226,21 @@ def main():
             if event == "Exit" or event == sg.WIN_CLOSED:
                 logging.info(f"""The exit action was selected""")
                 break
-            if values["-FOLDER-"] == "":
-                logging.info(f"""Browse was used without a directory being selected""")
-                continue
-            if values["-MAGNIFICATION-"] == "":
-                logging.info(f"""Browse was used without 'Magnification' being set""")
-                status.update("Status: insert the magnification")
-                continue
+            if event == "-CANCEL-":
+                logging.info(f"""Cancel was pressed""")
+                break
 
             # Folder name was filled in, make a list of files in the folder
-            if event == "-FOLDER-":
+            if event == "-OK-":
+                if values["-MAGNIFICATION-"] == "":
+                    logging.info(f"""Ok was pressed without 'Magnification' being set""")
+                    status.update("Status: insert the magnification")
+                    continue
+                if values["-FOLDER-"] == "":
+                    logging.info(f"""OK was pressed without a directory being selected""")
+                    status.update("Status: select a directory")
+                    continue
+
                 logging.info(f"""Selected directory event start""")
                 folder = values["-FOLDER-"]
                 logging.info(f"""Loading images from '{folder}'""")
@@ -244,6 +258,8 @@ def main():
                     logging.exception(e)
                     status.update("Status: review magnification")
                     continue
+
+                id = values["-ID-"]
 
                 logging.info(f"""Total of {len(images)} found""")
                 for image in images:
@@ -264,6 +280,7 @@ def main():
                     if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
                         if not i + 1 == len(images):
                             window["-FOLDER-"]("")
+                            window["-ID-"]("")
                             window["-MAGNIFICATION-"]("")
                             status.update("Status: canceled by the user")
                             update_status = False
@@ -288,13 +305,16 @@ def main():
                     prediction[:, :, 1] = np.where(np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 127, 0)
                     prediction[:, :, 2] = np.where(np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 127, 0)
 
-                    save_annotation(prediction, annotation_directory, image_path, original_shape, magnification)
+                    save_annotation(prediction, annotation_directory, image_path, original_shape, id, magnification)
                     tf.keras.backend.clear_session()
                     logging.info(f"""Done processing image {str(image_path)}""")
+            else:
+                update_status = False
 
             if update_status:
                 status.update("Status: done!")
                 window["-FOLDER-"]("")
+                window["-ID-"]("")
                 window["-MAGNIFICATION-"]("")
             else:
                 update_status = True

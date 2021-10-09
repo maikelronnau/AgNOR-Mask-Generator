@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('icon.ico', '.'), ('AgNOR_e030_l0.0782_vl0.2396.h5', '.')]
+datas = [('icon.ico', '.'), ('AgNOR_e087_l0.0273_vl0.1332.h5', '.')]
 binaries = []
 hiddenimports = ['tensorflow']
 tmp_ret = collect_all('tensorflow')
@@ -27,19 +27,15 @@ pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
 exe = EXE(pyz,
           a.scripts,
+          a.binaries,
+          a.zipfiles,
+          a.datas,
           [],
-          exclude_binaries=True,
           name='Mask Generator',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
           upx=True,
+          upx_exclude=[],
+          runtime_tmpdir=None,
           console=False , icon='icon.ico')
-coll = COLLECT(exe,
-               a.binaries,
-               a.zipfiles,
-               a.datas,
-               strip=False,
-               upx=True,
-               upx_exclude=[],
-               name='Mask Generator')
