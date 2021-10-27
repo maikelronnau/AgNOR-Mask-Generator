@@ -119,6 +119,7 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
 
 
 def main():
+    logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)
     parser = argparse.ArgumentParser(description="Mask Generator")
 
     parser.add_argument(
@@ -131,7 +132,11 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
-        logging.basicConfig(filename="mskg.log", filemode="a", level=logging.DEBUG, format="%(asctime)s %(levelname)s %(message)s")
+        logging.basicConfig(
+            filename="mskg.log",
+            filemode="a",
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(message)s")
 
     try:
         logging.info(f"""Starting""")

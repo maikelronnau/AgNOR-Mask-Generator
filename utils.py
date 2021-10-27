@@ -1,3 +1,5 @@
+import logging
+
 import cv2
 import numpy as np
 import segmentation_models as sm
@@ -47,6 +49,7 @@ def smooth_contours(contours, points=30):
             # Convert it back to Numpy format for OpenCV to be able to display it
             res_array = [[[int(i[0]), int(i[1])]] for i in zip(x_new,y_new)]
             smoothened_contours.append(np.asarray(res_array, dtype=np.int32))
-        except:
-            pass
+        except Exception as e:
+            logging.warning("The smoothing of a contour caused a failure.")
+            logging.exception(e)
     return smoothened_contours
