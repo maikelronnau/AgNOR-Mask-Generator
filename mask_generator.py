@@ -13,6 +13,7 @@ import tensorflow as tf
 
 from utils import CUSTOM_OBJECTS, filter_contours, smooth_contours
 
+MSKG_VERSION = "v11"
 
 def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification):
     logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
@@ -32,6 +33,7 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
 
     annotation = {
         "version": "4.5.7",
+        "mskg_version": MSKG_VERSION,
         "flags": {},
         "shapes": [],
         "imageHeight": height,
