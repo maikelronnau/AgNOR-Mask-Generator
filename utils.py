@@ -1,3 +1,4 @@
+import hashlib
 import logging
 
 import cv2
@@ -13,16 +14,12 @@ CUSTOM_OBJECTS = {
     "iou_score": sm.metrics.iou_score,
 }
 
-def filter_contours(contours, min_area=5000, max_area=40000):
-    filtered_contours = []
-    for contour in contours:
-        try:
-            contour_area = cv2.contourArea(contour)
-            if min_area <= contour_area and contour_area <= max_area:
-                filtered_contours.append(contour)
-        except:
-            pass
-    return filtered_contours
+
+def get_hash_file(path):
+    with open(path, "rb") as f:
+        bytes = f.read()
+        hash_file = hashlib.sha256(bytes).hexdigest()
+    return hash_file
 
 
 def smooth_contours(contours, points=30):
@@ -53,3 +50,79 @@ def smooth_contours(contours, points=30):
             logging.warning("The smoothing of a contour caused a failure.")
             logging.exception(e)
     return smoothened_contours
+
+
+def get_contour_pixel_count(contour, shape):
+    image = np.zeros(shape)
+    cv2.drawContours(image, contours=[contour], contourIdx=-1, color=1, thickness=cv2.FILLED)
+    return int(image.sum())
+
+
+def get_contours(binary_mask):
+    binary_mask[binary_mask > 0] = 255
+    binary_mask = binary_mask.astype(np.uint8)
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return contours
+
+
+def filter_contours_by_size(contours, min_area=5000, max_area=40000):
+    filtered_contours = []
+    discarded = []
+    for contour in contours:
+        try:
+            contour_area = cv2.contourArea(contour)
+            if min_area <= contour_area and contour_area <= max_area:
+                filtered_contours.append(contour)
+            else:
+                discarded.append(contour)
+        except:
+            pass
+    return filtered_contours, discarded
+
+
+def filter_nuclei_without_nors(nuclei_polygons, nors_polygons):
+    """Filter out nuclei without NORs."""
+    filtered_nuclei = []
+    discarded = []
+    for nucleus in nuclei_polygons:
+        keep_nucleus = False
+        for nor in nors_polygons:
+            for nor_point in nor:
+                if cv2.pointPolygonTest(nucleus, tuple(nor_point[0]), True) >= 0:
+                    keep_nucleus = True
+        if keep_nucleus:
+            filtered_nuclei.append(nucleus)
+        else:
+            discarded.append(nucleus)
+    return filtered_nuclei, discarded
+
+
+def filter_non_convex_nuclei(nuclei_polygons, shape):
+    """Filter out non-convex enough nuclei."""
+    convex_enough = []
+    discarded = []
+    for nucleus in nuclei_polygons:
+        smoothed = get_contour_pixel_count(nucleus, shape)
+        convex = get_contour_pixel_count(cv2.convexHull(nucleus), shape)
+        if convex - smoothed < 1000:
+            convex_enough.append(nucleus)
+        else:
+            discarded.append(nucleus)
+    return convex_enough, discarded
+
+
+def filter_nors_outside_nuclei(nuclei_polygons, nors_polygons):
+    """Filter out NORs outside nuclei."""
+    filtered_nors = []
+    discarded = []
+    for nor in nors_polygons:
+        keep_nor = False
+        for nucleus in nuclei_polygons:
+            for nor_point in nor:
+                if cv2.pointPolygonTest(nucleus, tuple(nor_point[0]), True) >= 0:
+                    keep_nor = True
+        if keep_nor:
+            filtered_nors.append(nor)
+        else:
+            discarded.append(nor)
+    return filtered_nors, discarded

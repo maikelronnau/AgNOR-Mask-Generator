@@ -11,11 +11,15 @@ import numpy as np
 import PySimpleGUI as sg
 import tensorflow as tf
 
-from utils import CUSTOM_OBJECTS, filter_contours, smooth_contours
+from utils import (CUSTOM_OBJECTS, filter_contours_by_size,
+                   filter_non_convex_nuclei, filter_nors_outside_nuclei,
+                   filter_nuclei_without_nors, get_contours, smooth_contours, get_hash_file)
+
 
 MSKG_VERSION = "v11"
 
-def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification):
+
+def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification, hashfile=None):
     logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
     width = original_shape[0]
     height = original_shape[1]
@@ -41,41 +45,31 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
         "id": id,
         "magnification": magnification,
         "imagePath": os.path.basename(name),
+        "imageHash": hashfile,
         "imageData": None
     }
 
     logging.info(f"""Find nuclei contours""")
     # Find segmentation contours
-    nuclei_polygons, _ = cv2.findContours(nuclei_prediction.astype("uint8"), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    nuclei_polygons = get_contours(nuclei_prediction)
     logging.info(f"""Filter nuclei contours""")
-    nuclei_polygons = filter_contours(nuclei_polygons)
+    nuclei_polygons, _ = filter_contours_by_size(nuclei_polygons)
     logging.info(f"""Smooth nuclei contours""")
     nuclei_polygons = smooth_contours(nuclei_polygons, points=40)
 
     logging.info(f"""Find NORs contours""")
-    nors_polygons, _ = cv2.findContours(nors_prediction.astype("uint8"), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    nors_polygons = get_contours(nors_prediction)
     logging.info(f"""Smooth NORs contours""")
     nors_polygons = smooth_contours(nors_polygons, points=20)
 
     logging.info(f"""Filter out nuclei without nors""")
-    filtered_nuclei = []
-    for nucleus in nuclei_polygons:
-        keep_nucleus = False
-        for nor in nors_polygons:
-            if cv2.pointPolygonTest(nucleus, tuple(nor[0][0]), True) >= 0:
-                keep_nucleus = True
-        if keep_nucleus:
-            filtered_nuclei.append(nucleus)
+    filtered_nuclei, _ = filter_nuclei_without_nors(nuclei_polygons, nors_polygons)
+    # TODO: Verify whether this function should be called or not.
+    # logging.info(f"""Filter out deformed nuclei""")
+    # filtered_nuclei, _ = filter_non_convex_nuclei(filtered_nuclei, (height, width))
 
     logging.info(f"""Filter out NORs outside nuclei""")
-    filtered_nors = []
-    for nor in nors_polygons:
-        keep_nor = False
-        for nucleus in nuclei_polygons:
-            if cv2.pointPolygonTest(nucleus, tuple(nor[0][0]), True) >= 0:
-                keep_nor = True
-        if keep_nor:
-            filtered_nors.append(nor)
+    filtered_nors, _ = filter_nors_outside_nuclei(filtered_nuclei, nors_polygons)
 
     logging.info(f"""Add nuclei shapes to annotation file""")
     for nucleus_points in filtered_nuclei:
@@ -148,14 +142,14 @@ def main():
         main_font = ("Arial", "10", "bold")
         secondary_font = ("Arial", "10")
 
-        # Consturct UI
+        # Construct UI
         layout = [
             [
                 sg.Text(f"{' ' * 19}ID\t", text_color="white", font=main_font),
                 sg.InputText(size=(30, 1), key="-ID-")
             ],
             [
-                sg.Text("Maginification\t", text_color="white", font=main_font),
+                sg.Text("Magnification\t", text_color="white", font=main_font),
                 sg.InputText(size=(30, 1), key="-MAGNIFICATION-")
             ],
             [
@@ -222,11 +216,6 @@ def main():
         height, width, channels = input_shape
         image_tensor = np.empty((1, height, width, channels))
 
-        logging.info(f"""List local files""")
-        for file_name in [path for path in Path(__file__).parent.rglob("*.*")]:
-            logging.info(f"""{str(file_name)}""")
-        logging.info(f"""Finished listing local files""")
-
         # UI loop
         while True:
             event, values = window.read()
@@ -261,7 +250,7 @@ def main():
                 try:
                     magnification = int(values["-MAGNIFICATION-"])
                 except Exception as e:
-                    logging.warning("Maginifcation information could not be converted to numberical values.")
+                    logging.warning("Magnification information could not be converted to numerical values.")
                     logging.exception(e)
                     status.update("Status: review magnification")
                     continue
@@ -312,7 +301,8 @@ def main():
                     prediction[:, :, 1] = np.where(np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 127, 0)
                     prediction[:, :, 2] = np.where(np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 127, 0)
 
-                    save_annotation(prediction, annotation_directory, image_path, original_shape, id, magnification)
+                    hashfile = get_hash_file(image_path)
+                    save_annotation(prediction, annotation_directory, image_path, original_shape, id, magnification, hashfile)
                     tf.keras.backend.clear_session()
                     logging.info(f"""Done processing image {str(image_path)}""")
             else:
