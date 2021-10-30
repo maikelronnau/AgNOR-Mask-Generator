@@ -13,13 +13,13 @@ import tensorflow as tf
 
 from utils import (CUSTOM_OBJECTS, filter_contours_by_size,
                    filter_non_convex_nuclei, filter_nors_outside_nuclei,
-                   filter_nuclei_without_nors, get_contours, smooth_contours, get_hash_file)
+                   filter_nuclei_without_nors, get_contours, get_hash_file,
+                   smooth_contours)
+
+MSKG_VERSION = "v12"
 
 
-MSKG_VERSION = "v11"
-
-
-def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification, hashfile=None):
+def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification, hashfile=None, date_time=None):
     logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
     width = original_shape[0]
     height = original_shape[1]
@@ -46,6 +46,7 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
         "magnification": magnification,
         "imagePath": os.path.basename(name),
         "imageHash": hashfile,
+        "dateTime": date_time,
         "imageData": None
     }
 
@@ -136,6 +137,8 @@ def main():
 
     try:
         logging.info(f"""Starting""")
+        date_time = f"{time.strftime('%Y%m%d%H%M%S')}"
+        logging.info(date_time)
         logging.info(f"""Setting theme""")
 
         sg.theme("DarkBlue")
@@ -302,7 +305,7 @@ def main():
                     prediction[:, :, 2] = np.where(np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 127, 0)
 
                     hashfile = get_hash_file(image_path)
-                    save_annotation(prediction, annotation_directory, image_path, original_shape, id, magnification, hashfile)
+                    save_annotation(prediction, annotation_directory, image_path, original_shape, id, magnification, hashfile, date_time)
                     tf.keras.backend.clear_session()
                     logging.info(f"""Done processing image {str(image_path)}""")
             else:
