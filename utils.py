@@ -22,6 +22,22 @@ def get_hash_file(path):
     return hash_file
 
 
+def get_number_of_nor_contour_points(contour, shape):
+    pixel_count = get_contour_pixel_count(contour, shape=shape)
+    if pixel_count <= 100:
+        return 8
+    elif pixel_count <= 125:
+        return 9
+    elif pixel_count <= 150:
+        return 10
+    elif pixel_count <= 200:
+        return 11
+    elif pixel_count <= 250:
+        return 13
+    else:
+        return 16
+
+
 def smooth_contours(contours, points=30):
     smoothened_contours = []
     for contour in contours:
@@ -88,7 +104,7 @@ def filter_nuclei_without_nors(nuclei_polygons, nors_polygons):
         keep_nucleus = False
         for nor in nors_polygons:
             for nor_point in nor:
-                if cv2.pointPolygonTest(nucleus, tuple(nor_point[0]), True) >= 0:
+                if cv2.pointPolygonTest(nucleus, tuple(nor_point[0]), False) >= 0:
                     keep_nucleus = True
         if keep_nucleus:
             filtered_nuclei.append(nucleus)
@@ -119,7 +135,7 @@ def filter_nors_outside_nuclei(nuclei_polygons, nors_polygons):
         keep_nor = False
         for nucleus in nuclei_polygons:
             for nor_point in nor:
-                if cv2.pointPolygonTest(nucleus, tuple(nor_point[0]), True) >= 0:
+                if cv2.pointPolygonTest(nucleus, tuple(nor_point[0]), False) >= 0:
                     keep_nor = True
         if keep_nor:
             filtered_nors.append(nor)
