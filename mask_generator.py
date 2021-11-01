@@ -13,9 +13,8 @@ import tensorflow as tf
 
 from utils import (CUSTOM_OBJECTS, filter_contours_by_size,
                    filter_non_convex_nuclei, filter_nors_outside_nuclei,
-                   filter_nuclei_without_nors, get_contour_pixel_count,
-                   get_contours, get_hash_file,
-                   get_number_of_nor_contour_points, smooth_contours)
+                   filter_nuclei_without_nors, get_contours, get_hash_file,
+                   smooth_contours)
 
 
 MSKG_VERSION = "v12"
@@ -63,11 +62,7 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
     logging.info(f"""Find NORs contours""")
     nors_polygons = get_contours(nors_prediction)
     logging.info(f"""Smooth NORs contours""")
-    for i in range(len(nors_polygons)):
-        points = get_number_of_nor_contour_points(nors_polygons[i], shape=(height, width))
-        smoothed_contour = smooth_contours([nors_polygons[i]], points=points)
-        if len(smoothed_contour) == 1:
-            nors_polygons[i] = smoothed_contour[0]
+    nors_polygons = smooth_contours(nors_polygons, points=16)
 
     logging.info(f"""Filter out nuclei without nors""")
     filtered_nuclei, _ = filter_nuclei_without_nors(nuclei_polygons, nors_polygons)

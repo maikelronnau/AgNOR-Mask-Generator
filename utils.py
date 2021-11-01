@@ -22,22 +22,6 @@ def get_hash_file(path):
     return hash_file
 
 
-def get_number_of_nor_contour_points(contour, shape):
-    pixel_count = get_contour_pixel_count(contour, shape=shape)
-    if pixel_count <= 100:
-        return 8
-    elif pixel_count <= 125:
-        return 9
-    elif pixel_count <= 150:
-        return 10
-    elif pixel_count <= 200:
-        return 11
-    elif pixel_count <= 250:
-        return 13
-    else:
-        return 16
-
-
 def smooth_contours(contours, points=30):
     smoothened_contours = []
     for contour in contours:
