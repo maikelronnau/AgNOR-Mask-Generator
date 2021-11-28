@@ -66,12 +66,13 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
 
     logging.info(f"""Filter out nuclei without nors""")
     filtered_nuclei, _ = filter_nuclei_without_nors(nuclei_polygons, nors_polygons)
-    # TODO: Verify whether this function should be called or not.
-    # logging.info(f"""Filter out deformed nuclei""")
-    # filtered_nuclei, _ = filter_non_convex_nuclei(filtered_nuclei, (height, width))
+    logging.info(f"""Filter out overlapping and deformed nuclei""")
+    filtered_nuclei, discarded_nuclei = filter_non_convex_nuclei(filtered_nuclei, (height, width))
 
     logging.info(f"""Filter out NORs outside nuclei""")
     filtered_nors, _ = filter_nors_outside_nuclei(filtered_nuclei, nors_polygons)
+    logging.info(f"""Filter out NORs the discarded nuclei""")
+    discarded_nors, _ = filter_nors_outside_nuclei(discarded_nuclei, nors_polygons)
 
     logging.info(f"""Add nuclei shapes to annotation file""")
     for nucleus_points in filtered_nuclei:
@@ -96,6 +97,36 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
 
         shape = {
             "label": "nor",
+            "points": points,
+            "group_id": None,
+            "shape_type": "polygon",
+            "flags": {}
+        }
+        annotation["shapes"].append(shape)
+
+    logging.info(f"""Add discarded nuclei shapes to annotation file""")
+    for discarded_nucleus_points in discarded_nuclei:
+        points = []
+        for point in discarded_nucleus_points:
+            points.append([int(value) for value in point[0]])
+
+        shape = {
+            "label": "discarded_nucleus",
+            "points": points,
+            "group_id": None,
+            "shape_type": "polygon",
+            "flags": {}
+        }
+        annotation["shapes"].append(shape)
+
+    logging.info(f"""Add discarded NORs shapes to annotation file""")
+    for discarded_nors_points in discarded_nors:
+        points = []
+        for point in discarded_nors_points:
+            points.append([int(value) for value in point[0]])
+
+        shape = {
+            "label": "discarded_nor",
             "points": points,
             "group_id": None,
             "shape_type": "polygon",
