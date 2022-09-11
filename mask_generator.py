@@ -1,40 +1,81 @@
 import argparse
 import json
 import logging
-import os
 import shutil
 import time
 from pathlib import Path
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
 import PySimpleGUI as sg
 import tensorflow as tf
 
-from utils import (CUSTOM_OBJECTS, filter_contours_by_size,
-                   filter_non_convex_nuclei, filter_nors_outside_nuclei,
-                   filter_nuclei_without_nors, get_contours, get_hash_file,
-                   smooth_contours)
+from utils import contour_analysis
+from utils.data import list_files
+from utils.model import load_model
+from utils.utils import collapse_probabilities, color_classes, get_hash_file
 
 
-MSKG_VERSION = "v12"
+PROGRAM_NAME = "AgNOR Mask Generator"
+MSKG_VERSION = "v13"
+MODEL_PATH = "AgNOR_e142_l0.0453_DenseNet-169_Linknet.h5"
+DECISION_TREE_MODEL_PATH = "agnor_decision_tree_classifier.joblib"
+DEFAULT_MODEL_INPUT_SHAPE = (1920, 2560, 3)
+
+LABELME_CLASS_NAMES = (
+    "_background_",
+    "nucleus",
+    "cluster",
+    "satellite",
+    "discarded_nucleus",
+    "discarded_nor"
+)
+LABELME_CLASS_IDS = {
+    "__ignore__": -1,
+    "_background_": 0,
+    "nucleus": 1,
+    "cluster": 2,
+    "satellite": 3,
+    "discarded_nucleus": 4,
+    "discarded_cluster": 5
+}
 
 
-def save_annotation(prediction, annotation_directory, name, original_shape, id, magnification, hashfile=None, date_time=None):
-    logging.info(f"""Saving image annotations from {Path(name).name} annotations to {str(annotation_directory)}""")
-    width = original_shape[0]
-    height = original_shape[1]
+def save_annotation(
+    input_image: np.ndarray,
+    prediction: np.ndarray,
+    patient: str,
+    annotation_directory: str,
+    output_directory: str,
+    source_image_path: str,
+    original_image_shape: Tuple[int, int],
+    hashfile: Optional[str] = None,
+    classify_agnor: Optional[bool] = False,
+    datetime: Optional[str] = None) -> None:
+    """Save a `labelme` annotation from a segmented input image.
 
-    prediction = cv2.resize(prediction, (width, height))
-    prediction[:, :, 0] = np.where(
-        np.logical_and(prediction[:, :, 0] > prediction[:, :, 1], prediction[:, :, 0] > prediction[:, :, 2]), 255, 0)
-    prediction[:, :, 1] = np.where(
-        np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 255, 0)
-    prediction[:, :, 2] = np.where(
-        np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 255, 0)
-
-    nuclei_prediction = prediction[:, :, 1].astype(np.uint8)
-    nors_prediction = prediction[:, :, 2].astype(np.uint8)
+    Args:
+        input_image (np.ndarray): The input image.
+        prediction (np.ndarray): The segmented image.
+        patient (str): The identification of the patient.
+        annotation_directory (str): Path where to save the annotations.
+        output_directory (str): Path where to save the segmentation measurements.
+        source_image_path (str): Input image path.
+        original_image_shape (Tuple[int, int]): Height and width of the input image.
+        hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
+        classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
+        datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
+    """        
+    annotation_directory = Path(annotation_directory)
+    output_directory = Path(output_directory)
+    source_image_path = Path(source_image_path)
+    overlay_directory = output_directory.joinpath("overlay")
+    overlay_directory.mkdir(exist_ok=True)
+    
+    logging.debug(f"""Saving image annotations from {source_image_path.name} annotations to {str(annotation_directory)}""")
+    height = original_image_shape[0] 
+    width = original_image_shape[1]
 
     annotation = {
         "version": "4.5.7",
@@ -43,43 +84,51 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
         "shapes": [],
         "imageHeight": height,
         "imageWidth": width,
-        "id": id,
-        "magnification": magnification,
-        "imagePath": os.path.basename(name),
+        "patient": patient,
+        "imagePath": source_image_path.name,
         "imageHash": hashfile,
-        "dateTime": date_time,
+        "dateTime": datetime,
         "imageData": None
     }
 
-    logging.info(f"""Find nuclei contours""")
-    # Find segmentation contours
-    nuclei_polygons = get_contours(nuclei_prediction)
-    logging.info(f"""Filter nuclei contours""")
-    nuclei_polygons, _ = filter_contours_by_size(nuclei_polygons)
-    logging.info(f"""Smooth nuclei contours""")
-    nuclei_polygons = smooth_contours(nuclei_polygons, points=40)
+    logging.debug(f"""Analyze contours""")
+    prediction, _ = contour_analysis.analyze_contours(mask=prediction, smooth=True)
+    prediction, parent_contours, child_contours = prediction
 
-    logging.info(f"""Find NORs contours""")
-    nors_polygons = get_contours(nors_prediction)
-    logging.info(f"""Smooth NORs contours""")
-    nors_polygons = smooth_contours(nors_polygons, points=16)
+    if classify_agnor:
+        logging.debug("Add an extra channel to map `satellites`")
+        prediction = np.stack([
+            prediction[:, :, 0],
+            prediction[:, :, 1],
+            prediction[:, :, 2],
+            np.zeros(original_image_shape, dtype=np.uint8) # Width and height reversed because of OpenCV.
+        ], axis=2)
+    
+    logging.debug("Obtain contour measurements and append shapes to annotation file")
+    for i, parent_contour in enumerate(parent_contours):
+        filtered_child_contour, _ = contour_analysis.discard_contours_outside_contours([parent_contour], child_contours)
+        measurements = contour_analysis.get_contour_measurements(
+            parent_contours=[parent_contour],
+            child_contours=filtered_child_contour,
+            shape=original_image_shape,
+            mask_name=source_image_path.name,
+            record_id=patient,
+            start_index=i)
 
-    logging.info(f"""Filter out nuclei without nors""")
-    filtered_nuclei, _ = filter_nuclei_without_nors(nuclei_polygons, nors_polygons)
-    logging.info(f"""Filter out overlapping and deformed nuclei""")
-    filtered_nuclei, discarded_nuclei = filter_non_convex_nuclei(filtered_nuclei, (height, width))
-
-    logging.info(f"""Filter out NORs outside nuclei""")
-    filtered_nors, _ = filter_nors_outside_nuclei(filtered_nuclei, nors_polygons)
-    logging.info(f"""Filter out NORs the discarded nuclei""")
-    discarded_nors, _ = filter_nors_outside_nuclei(discarded_nuclei, nors_polygons)
-
-    logging.info(f"""Add nuclei shapes to annotation file""")
-    for nucleus_points in filtered_nuclei:
+        if classify_agnor:
+            measurements = contour_analysis.classify_agnor(DECISION_TREE_MODEL_PATH, measurements)
+            # OpenCV's `drawContours` fails using array slices, so a new matrix must be created, drawn on and assigned to `predictions`.
+            satellites = prediction[:, :, 3].copy()
+            for classified_measurement, classified_contour in zip(measurements[1:], filtered_child_contour):
+                if classified_measurement["type"] == "satellite":
+                    cv2.drawContours(satellites, contours=[classified_contour], contourIdx=-1, color=1, thickness=cv2.FILLED)
+            prediction[:, :, 3] = satellites
+        
+        # Prepare and append nucleus shape
         points = []
-        for point in nucleus_points:
+        for point in parent_contour:
             points.append([int(value) for value in point[0]])
-
+        
         shape = {
             "label": "nucleus",
             "points": points,
@@ -89,67 +138,60 @@ def save_annotation(prediction, annotation_directory, name, original_shape, id, 
         }
         annotation["shapes"].append(shape)
 
-    logging.info(f"""Add NORs shapes to annotation file""")
-    for nors_points in filtered_nors:
-        points = []
-        for point in nors_points:
-            points.append([int(value) for value in point[0]])
+        for measurement, contour in zip(measurements[1:], filtered_child_contour):
+            points = []
+            for point in contour:
+                points.append([int(value) for value in point[0]])
 
-        shape = {
-            "label": "nor",
-            "points": points,
-            "group_id": None,
-            "shape_type": "polygon",
-            "flags": {}
-        }
-        annotation["shapes"].append(shape)
+            shape = {
+                "label": measurement["type"],
+                "points": points,
+                "group_id": None,
+                "shape_type": "polygon",
+                "flags": {}
+            }
+            annotation["shapes"].append(shape)
 
-    logging.info(f"""Add discarded nuclei shapes to annotation file""")
-    for discarded_nucleus_points in discarded_nuclei:
-        points = []
-        for point in discarded_nucleus_points:
-            points.append([int(value) for value in point[0]])
+        contour_analysis.write_contour_measurements(
+            measurements=measurements,
+            output_path=output_directory,
+            datetime=datetime)
+        
+    logging.debug(f"""Write annotation file""")
+    annotation_path = str(annotation_directory.joinpath(f"{source_image_path.stem}.json"))
+    with open(annotation_path, "w") as output_file:
+        json.dump(annotation, output_file, indent=4)
 
-        shape = {
-            "label": "discarded_nucleus",
-            "points": points,
-            "group_id": None,
-            "shape_type": "polygon",
-            "flags": {}
-        }
-        annotation["shapes"].append(shape)
+    logging.debug(f"""Copy original image to the annotation directory""")
+    filename = annotation_directory.joinpath(source_image_path.name)
+    if not filename.is_file():
+        shutil.copyfile(str(source_image_path), str(filename))
 
-    logging.info(f"""Add discarded NORs shapes to annotation file""")
-    for discarded_nors_points in discarded_nors:
-        points = []
-        for point in discarded_nors_points:
-            points.append([int(value) for value in point[0]])
+    prediction = color_classes(prediction)
+    prediction = cv2.cvtColor(prediction, cv2.COLOR_BGR2RGB)
+    prediction[prediction == 130] = 0
 
-        shape = {
-            "label": "discarded_nor",
-            "points": points,
-            "group_id": None,
-            "shape_type": "polygon",
-            "flags": {}
-        }
-        annotation["shapes"].append(shape)
+    alpha = 0.8
+    beta = 0.1
+    gamma = 0.0
+    overlay = cv2.addWeighted(input_image, alpha, prediction, beta, gamma)
+    cv2.imwrite(str(overlay_directory.joinpath(source_image_path.name)), overlay)
 
-    logging.info(f"""Write annotation file""")
-    with open(os.path.join(annotation_directory, f'{os.path.splitext(os.path.basename(name))[0]}.json'), "w") as output_file:
-        json.dump(annotation, output_file, indent=2)
 
-    logging.info(f"""Copy original image to the annotation directory""")
-    if Path(os.path.join(annotation_directory, os.path.basename(name))).is_file():
-        filename = Path(os.path.join(annotation_directory, os.path.basename(name)))
-        filename = filename.stem + f"_{np.random.randint(1, 1000)}" + filename.suffix
-        shutil.copyfile(name, os.path.join(annotation_directory, filename))
-    else:
-        shutil.copyfile(name, os.path.join(annotation_directory, os.path.basename(name)))
+def clear_fields(window: sg.Window):
+    """Clear the field in the UI.
+
+    Args:
+        window (sg.Window): The window handler.
+    """
+    window["-INPUT-DIRECTORY-"]("")
+    window["-OUTPUT-DIRECTORY-"]("")
+    window["-PATIENT-"]("")
 
 
 def main():
     logging.basicConfig(format='%(asctime)s %(levelname)s %(message)s', level=logging.INFO)
-    parser = argparse.ArgumentParser(description="Mask Generator")
+    parser = argparse.ArgumentParser(description=PROGRAM_NAME)
 
     parser.add_argument(
         "-d",
@@ -168,10 +210,10 @@ def main():
             format="%(asctime)s %(levelname)s %(message)s")
 
     try:
-        logging.info(f"""Starting""")
-        date_time = f"{time.strftime('%Y%m%d%H%M%S')}"
-        logging.info(date_time)
-        logging.info(f"""Setting theme""")
+        logging.debug(f"""Starting""")
+        datetime = f"{time.strftime('%Y%m%d%H%M%S')}"
+        logging.debug(datetime)
+        logging.debug(f"""Setting theme""")
 
         sg.theme("DarkBlue")
         main_font = ("Arial", "10", "bold")
@@ -180,16 +222,17 @@ def main():
         # Construct UI
         layout = [
             [
-                sg.Text(f"{' ' * 19}ID\t", text_color="white", font=main_font),
-                sg.InputText(size=(30, 1), key="-ID-")
+                sg.Text(f"{' ' * 14}Patient\t", text_color="white", font=main_font),
+                sg.InputText(size=(30, 1), key="-PATIENT-")
             ],
             [
-                sg.Text("Magnification\t", text_color="white", font=main_font),
-                sg.InputText(size=(30, 1), key="-MAGNIFICATION-")
+                sg.Text("Image Directory\t", text_color="white", font=main_font),
+                sg.In(size=(70, 1), enable_events=True, key="-INPUT-DIRECTORY-"),
+                sg.FolderBrowse()
             ],
             [
-                sg.Text("Image Folder\t", text_color="white", font=main_font),
-                sg.In(size=(70, 1), enable_events=True, key="-FOLDER-"),
+                sg.Text("Output Directory\t", text_color="white", font=main_font),
+                sg.In(size=(70, 1), enable_events=True, key="-OUTPUT-DIRECTORY-"),
                 sg.FolderBrowse()
             ],
             [
@@ -201,156 +244,135 @@ def main():
             ]
         ]
 
-        icon_paths = [icon_path for icon_path in Path(__file__).parent.rglob("icon.ico")]
-        logging.info(f"Icons found: {icon_paths}")
-
-        if icon_paths[0].is_file():
-            icon = str(icon_paths[0])
-            logging.info(f"Loading icon from '{icon}'")
-        else:
-            logging.warning("Did not find 'icon.ico'.")
-            logging.warning("Program will start without it.")
-            icon = None
-
-        logging.info(f"""Create window""")
+        logging.debug(f"""Create window""")
+        icon_path = "icon.ico"
         try:
-            if icon:
-                window = sg.Window("Mask Generator", layout, finalize=True, icon=icon)
+            if Path(icon_path).is_file():
+                logging.debug(f"""Load icon""")
+                window = sg.Window(PROGRAM_NAME, layout, finalize=True, icon=icon_path)
             else:
-                window = sg.Window("Mask Generator", layout, finalize=True)
+                window = sg.Window(PROGRAM_NAME, layout, finalize=True)
         except Exception as e:
-            logging.info(f"Could not load found icon.")
-            window = sg.Window("Mask Generator", layout, finalize=True)
+            logging.debug(f"Could not load icon.")
+            window = sg.Window(PROGRAM_NAME, layout, finalize=True)
             logging.warning("Program will start without it.")
 
         status = window["-STATUS-"]
         update_status = True
 
-        # Prediction settings
-        supported_types = [".tif", ".tiff", ".png", ".jpg", ".jpeg"]
-
-        models_paths = [models_path for models_path in Path(__file__).parent.rglob("AgNOR_e087_l0.0273_vl0.1332.h5")]
-
-        logging.info("Model(s) found:")
-        logging.info(f"{models_paths}")
-
-        if models_paths[0].is_file():
-            model_path = str(models_paths[0])
-            logging.info(f"Loading model from '{model_path}'")
-        else:
-            logging.error("Did not find a file corresponding to a model.")
-            raise Exception(f"Could not load '{models_paths[0]}' model.")
-
-        model = tf.keras.models.load_model(str(model_path), custom_objects=CUSTOM_OBJECTS)
-        logging.info(f"""Model loaded""")
-
-        input_shape = model.input_shape[1:]
-        logging.info(f"""Nuclei input shape: {input_shape}""")
+        logging.info(f"""Load model""")
+        try:
+            if Path(MODEL_PATH).is_file():
+                logging.debug(f"Loading model from '{MODEL_PATH}'")
+                model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+                logging.debug(f"Successfully loaded model '{MODEL_PATH}'")
+            else:
+                logging.error(f"Model file '{MODEL_PATH}' was not found.")
+                raise Exception(f"Model file '{MODEL_PATH}' was not found.")
+        except Exception as e:
+            logging.error(f"""{e.message}""")
+            raise Exception(f"Could not load '{MODEL_PATH}' model.")
+        logging.debug(f"""Successfully loaded model.""")
 
         # Prepare tensor
-        height, width, channels = input_shape
+        height, width, channels = DEFAULT_MODEL_INPUT_SHAPE
         image_tensor = np.empty((1, height, width, channels))
 
         # UI loop
         while True:
             event, values = window.read()
             if event == "Exit" or event == sg.WIN_CLOSED:
-                logging.info(f"""The exit action was selected""")
+                logging.debug(f"""The exit action was selected""")
                 break
             if event == "-CANCEL-":
-                logging.info(f"""Cancel was pressed""")
+                logging.debug(f"""Cancel was pressed""")
                 break
 
             # Folder name was filled in, make a list of files in the folder
             if event == "-OK-":
-                if values["-MAGNIFICATION-"] == "":
-                    logging.info(f"""Ok was pressed without 'Magnification' being set""")
-                    status.update("Status: insert the magnification")
-                    continue
-                if values["-FOLDER-"] == "":
-                    logging.info(f"""OK was pressed without a directory being selected""")
+                if values["-INPUT-DIRECTORY-"] == "":
+                    logging.debug(f"""OK was pressed without a directory being selected""")
                     status.update("Status: select a directory")
                     continue
 
-                logging.info(f"""Selected directory event start""")
-                folder = values["-FOLDER-"]
-                logging.info(f"""Loading images from '{folder}'""")
-                images = [path for path in Path(folder).rglob("*.*") if path.suffix.lower() in supported_types]
+                logging.debug(f"""Selected directory event start""")
+                folder = values["-INPUT-DIRECTORY-"]
+                logging.debug(f"""Loading images from '{folder}'""")
+                try:
+                    images = list_files(folder, as_numpy=True)
+                    logging.debug(f"""Total of {len(images)} found""")
+                except Exception as e:
+                    logging.error(f"{e.message}")
 
                 if len(images) == 0:
                     status.update("Status: no images found!")
-                    logging.info(f"""No images were found""")
+                    logging.debug(f"""No images were found""")
                     continue
 
-                try:
-                    magnification = int(values["-MAGNIFICATION-"])
-                except Exception as e:
-                    logging.warning("Magnification information could not be converted to numerical values.")
-                    logging.exception(e)
-                    status.update("Status: review magnification")
-                    continue
+                patient = values["-PATIENT-"]
 
-                id = values["-ID-"]
-
-                logging.info(f"""Total of {len(images)} found""")
-                for image in images:
-                    logging.info(f"""{image}""")
-
-                annotation_directory = f"{time.strftime('%Y-%m-%d-%Hh%Mm')}-proposed-annotations"
-                logging.info(f"""Annotation will be saved at {annotation_directory}""")
-                if not os.path.isdir(annotation_directory):
-                    os.mkdir(annotation_directory)
+                logging.debug("Create output directories")
+                output_directory = Path(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {patient}")
+                output_directory.mkdir(exist_ok=True)
+                logging.debug(f"Created '{str(output_directory)}' directory")
+                annotation_directory = output_directory.joinpath("annotations")
+                annotation_directory.mkdir(exist_ok=True)
+                logging.debug(f"Created '{str(annotation_directory)}' directory")
 
                 status.update("Status: processing")
                 event, values = window.read(timeout=0)
 
                 # Load and process each image
-                logging.info(f"""Start processing images""")
+                logging.debug(f"""Start processing images""")
                 for i, image_path in enumerate(images):
-                    logging.info(f"""Processing image {str(image_path)}""")
+                    logging.debug(f"""Processing image {image_path}""")
                     if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
                         if not i + 1 == len(images):
-                            window["-FOLDER-"]("")
-                            window["-ID-"]("")
-                            window["-MAGNIFICATION-"]("")
+                            clear_fields(window)
                             status.update("Status: canceled by the user")
                             update_status = False
                             break
 
-                    image_path = str(image_path)
                     image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                    image_original = image.copy()
+                    logging.debug(f"""Shape {image.shape}""")
+                    original_shape = image.shape[:2]
+
                     image = tf.cast(image, dtype=tf.float32)
                     image = image / 255.
-
-                    logging.info(f"""Shape {image.shape}""")
-                    original_shape = image.shape[:2][::-1]
-
                     image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
-                    image = cv2.resize(image, (width, height))
                     image_tensor[0, :, :, :] = image
 
-                    logging.info(f"""Predict""")
+                    logging.debug(f"""Predict""")
                     prediction = model.predict_on_batch(image_tensor)[0]
 
-                    prediction[:, :, 0] = np.where(np.logical_and(prediction[:, :, 0] > prediction[:, :, 1], prediction[:, :, 0] > prediction[:, :, 2]), 127, 0)
-                    prediction[:, :, 1] = np.where(np.logical_and(prediction[:, :, 1] > prediction[:, :, 0], prediction[:, :, 1] > prediction[:, :, 2]), 127, 0)
-                    prediction[:, :, 2] = np.where(np.logical_and(prediction[:, :, 2] > prediction[:, :, 0], prediction[:, :, 2] > prediction[:, :, 1]), 127, 0)
+                    prediction = collapse_probabilities(prediction, pixel_intensity=127)
 
                     hashfile = get_hash_file(image_path)
-                    save_annotation(prediction, annotation_directory, image_path, original_shape, id, magnification, hashfile, date_time)
+                    save_annotation(
+                        input_image=image_original,
+                        prediction=prediction,
+                        patient=patient,
+                        annotation_directory=str(annotation_directory),
+                        output_directory=str(output_directory),
+                        source_image_path=image_path,
+                        original_image_shape=original_shape,
+                        hashfile=hashfile,
+                        classify_agnor=True, # TODO: Update with argument coming from a checkbox in the UI.
+                        datetime=datetime
+                    )
+
                     tf.keras.backend.clear_session()
-                    logging.info(f"""Done processing image {str(image_path)}""")
+                    logging.debug(f"""Done processing image {image_path}""")
             else:
                 update_status = False
 
             if update_status:
                 status.update("Status: done!")
-                window["-FOLDER-"]("")
-                window["-ID-"]("")
-                window["-MAGNIFICATION-"]("")
+                clear_fields(window)
             else:
                 update_status = True
-            logging.info(f"""Selected directory event end""")
+            logging.debug(f"""Selected directory event end""")
         window.close()
     except Exception as e:
         logging.error(f"""{e}""")
