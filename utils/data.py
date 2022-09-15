@@ -136,12 +136,17 @@ def load_image(
         raise TypeError(f"Object `{image_path}` is not supported.")
 
 
-def list_files(files_path: str, as_numpy: Optional[bool] = False, seed: Optional[int] = 1234) -> tf.raw_ops.ShuffleDataset:
+def list_files(
+    files_path: str,
+    as_numpy: Optional[bool] = False,
+    file_types: Optional[list] = SUPPORTED_IMAGE_TYPES,
+    seed: Optional[int] = 1234) -> tf.raw_ops.ShuffleDataset:
     """Lists files under `files_path`.
 
     Args:
         files_path (str): The path to the directory containing the files to be listed.
         as_numpy: (Optional[bool], optional): Whether to return the listed files as Numpy comparable objects.
+        file_types (Optional[list], optional): List of file types to list. Defaults to `SUPPORTED_IMAGE_TYPES`.
         seed (Optional[int], optional): A seed used to shuffle the listed files. Note: If listing images and segmentation masks, the same seed must be used. Defaults to 1234.
 
     Raises:
@@ -152,7 +157,7 @@ def list_files(files_path: str, as_numpy: Optional[bool] = False, seed: Optional
         tf.raw_ops.ShuffleDataset: The listed files.
     """
     if Path(files_path).is_dir():
-        patterns = [str(Path(files_path).joinpath(f"*{image_type}")) for image_type in SUPPORTED_IMAGE_TYPES]
+        patterns = [str(Path(files_path).joinpath(f"*{image_type}")) for image_type in file_types]
         files_list = tf.data.Dataset.list_files(patterns, shuffle=True, seed=seed)
 
         if len(files_list) == 0:

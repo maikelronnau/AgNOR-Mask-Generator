@@ -531,7 +531,7 @@ def discard_unboxed_contours(
         for contour in nuclei_contours_adequate:
             for bbox in bboxes:
                 iou = get_intersection(bbox, contour, shape=prediction.shape[:2])
-                if iou > 0.2:
+                if iou > 0.:
                     nuclei_contours_adequate_final.append(contour)
         parent_contours = nuclei_contours_adequate_final
         child_contours, _ = discard_contours_outside_contours(parent_contours, child_contours)

@@ -1,6 +1,9 @@
 import datetime
 import hashlib
 import json
+import logging
+import subprocess
+import time
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
 
@@ -10,6 +13,12 @@ import numpy as np
 import pandas as pd
 import segmentation_models as sm
 import tensorflow as tf
+
+PROGRAM_NAME = "AgNOR Mask Generator"
+MSKG_VERSION = "v13"
+MODEL_PATH = "AgNOR_e142_l0.0453_DenseNet-169_Linknet.h5"
+DECISION_TREE_MODEL_PATH = "agnor_decision_tree_classifier.joblib"
+DEFAULT_MODEL_INPUT_SHAPE = (1920, 2560, 3)
 
 
 def collapse_probabilities(
@@ -407,8 +416,30 @@ def get_mean_rgb_values(contour: np.ndarray, image: np.ndarray) -> List[Union[fl
     return red, green, blue
 
 
-def get_hash_file(path):
+def get_hash_file(path: str) -> str:
+    """Generate and returns the SHA256 hash of a file.
+
+    Args:
+        path (str): Path to the file.
+
+    Returns:
+        str: The SHA256 hash of the file.
+    """
     with open(path, "rb") as f:
         bytes = f.read()
         hash_file = hashlib.sha256(bytes).hexdigest()
     return hash_file
+
+
+def open_with_labelme(path: str, wait: Optional[int] = 20) -> None:
+    """Open `labeleme` on the informed path.
+
+    Args:
+        path (str): Path to open with `labelme`.
+        wait (int): Time to wait after calling `labelme`.
+    """
+    logging.debug("Opening labelme")
+    subprocess.Popen([r"labelme.exe", str(path)])
+    logging.debug("Labelme called")
+    logging.debug(f"Waiting {wait} before resuming the program")
+    time.sleep(wait)
