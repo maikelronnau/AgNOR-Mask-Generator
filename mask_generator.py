@@ -12,13 +12,13 @@ from utils import user_interface
 from utils.annotation import create_annotation, update_annotation
 from utils.data import list_files
 from utils.model import load_model
-from utils.utils import (DEFAULT_MODEL_INPUT_SHAPE, MODEL_PATH, PROGRAM_NAME,
+from utils.utils import (DEFAULT_MODEL_INPUT_SHAPE, MODEL_PATH,
                          collapse_probabilities, get_hash_file,
                          open_with_labelme)
 
 
 def main():
-    parser = argparse.ArgumentParser(description=PROGRAM_NAME)
+    parser = argparse.ArgumentParser(description=user_interface.PROGRAM_NAME)
     parser.add_argument(
         "-d",
         "--debug",
@@ -42,7 +42,7 @@ def main():
         status = window["-STATUS-"]
         update_status = True
 
-        model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+        # model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
 
         # Prepare tensor
         height, width, channels = DEFAULT_MODEL_INPUT_SHAPE
@@ -75,6 +75,7 @@ def main():
                 output_directory = values["-OUTPUT-DIRECTORY-"]
                 bboxes = values["-USE-BOUNDING-BOXES-"]
                 classify_agnor = values["-CLASSIFY-AGNOR-"]
+                overlay = values["-GENERATE-OVERLAY-"]
 
                 # Bboxed annotations -> bboxed annotations
                 if bboxes:
@@ -159,6 +160,7 @@ def main():
                                     original_image_shape=original_shape,
                                     hashfile=hashfile,
                                     classify_agnor=classify_agnor,
+                                    overlay=overlay,
                                     datetime=datetime
                                 )
 
@@ -237,6 +239,7 @@ def main():
                                             original_image_shape=original_shape,
                                             hashfile=hashfile,
                                             classify_agnor=classify_agnor,
+                                            overlay=overlay,
                                             datetime=datetime
                                         )
 

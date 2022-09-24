@@ -5,9 +5,20 @@ from typing import List
 import PySimpleGUI as sg
 
 
-PROGRAM_NAME = "AgNOR Mask Generator"
+PROGRAM_NAME = "AgNOR Slide-Image Examiner"
+PROGRAM_TITLE = "Select images to count nuclei and AgNOR"
+TITLE_FONT = ("Arial", "14", "bold")
 MAIN_FONT = ("Arial", "10", "bold")
 SECONDARY_FONT = ("Arial", "10")
+
+TOOLTIPS = {
+    "patient": "Unique patient identifier. It can be the patient name or an ID/code.",
+    "image_directory": "A directory containing images to be processed.",
+    "inspect_with_labelme": "After processing, opens Labelme for inspection of the results.",
+    "classify_agnor": "Classify AgNORs in clusters or satellites.",
+    "bbox": "Restricts processing to nuclei within bounding boxes.",
+    "overlay": "Generates an overlay of the input image and the predicted segmentation."
+}
 
 
 def clear_fields(window: sg.Window):
@@ -22,6 +33,7 @@ def clear_fields(window: sg.Window):
     window["-OPEN-LABELME-"](False)
     window["-CLASSIFY-AGNOR-"](False)
     window["-USE-BOUNDING-BOXES-"](False)
+    window["-GENERATE-OVERLAY-"](False)
     window["-OUTPUT-DIRECTORY-"].update(disabled=False)
     window["-PATIENT-"].update(disabled=False)
 
@@ -34,12 +46,15 @@ def get_layout() -> List[list]:
     """
     layout = [
         [
-            sg.Text(f"{' ' * 14}Patient\t", text_color="white", font=MAIN_FONT),
-            sg.InputText(size=(30, 1), key="-PATIENT-")
+            sg.Text(PROGRAM_TITLE, text_color="white", font=TITLE_FONT),
         ],
         [
-            sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT),
-            sg.In(size=(70, 1), enable_events=True, key="-INPUT-DIRECTORY-"),
+            sg.Text(f"{' ' * 14}Patient\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["patient"]),
+            sg.InputText(size=(70, 1), key="-PATIENT-", tooltip=TOOLTIPS["patient"])
+        ],
+        [
+            sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"]),
+            sg.In(size=(70, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"]),
             sg.FolderBrowse()
         ],
         [
@@ -48,9 +63,12 @@ def get_layout() -> List[list]:
             sg.FolderBrowse()
         ],
         [
-            sg.Checkbox("Inspect with labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT),
-            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT),
-            sg.Checkbox("Use bounding boxes", default=False, enable_events=True, text_color="white", key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT)
+            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"]),
+            sg.Checkbox("Restrict processing to bounding boxes", default=False, enable_events=True, text_color="white", key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"])
+        ],
+        [
+            sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"]),
+            sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"])
         ],
         [
             sg.Text("Status: waiting" + " " * 30, text_color="white", key="-STATUS-", font=SECONDARY_FONT),

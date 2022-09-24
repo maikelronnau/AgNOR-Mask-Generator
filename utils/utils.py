@@ -14,8 +14,8 @@ import pandas as pd
 import segmentation_models as sm
 import tensorflow as tf
 
-PROGRAM_NAME = "AgNOR Mask Generator"
-MSKG_VERSION = "v13"
+
+MSKG_VERSION = "v14"
 MODEL_PATH = "AgNOR_e142_l0.0453_DenseNet-169_Linknet.h5"
 DECISION_TREE_MODEL_PATH = "agnor_decision_tree_classifier.joblib"
 DEFAULT_MODEL_INPUT_SHAPE = (1920, 2560, 3)

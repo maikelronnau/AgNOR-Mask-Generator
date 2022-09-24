@@ -12,6 +12,28 @@ from utils.utils import (DECISION_TREE_MODEL_PATH, MSKG_VERSION, color_classes, 
                          get_labelme_shapes)
 
 
+def get_segmentation_overlay(
+    input_image: np.ndarray,
+    prediction: np.ndarray,
+    alpha: Optional[float] = 0.8,
+    beta: Optional[float] = 0.1,
+    gamma: Optional[float] = 0.0) -> np.ndarray:
+    """Overlays the input image and the predicted segmentation.
+
+    Args:
+        input_image (np.ndarray): The input image.
+        prediction (np.ndarray): The segmentation prediction for the input image.
+        alpha (Optional[float], optional): Weight of the input image. Defaults to 0.8.
+        beta (Optional[float], optional): Weight of the prediction. Defaults to 0.1.
+        gamma (Optional[float], optional): Scalar added to each sum. Defaults to 0.0.
+
+    Returns:
+        np.ndarray: Overlaid segmentation.
+    """
+    overlay = cv2.addWeighted(input_image, alpha, prediction, beta, gamma)
+    return overlay
+
+
 def create_annotation(
     input_image: np.ndarray,
     prediction: np.ndarray,
@@ -22,6 +44,7 @@ def create_annotation(
     original_image_shape: Tuple[int, int],
     hashfile: Optional[str] = None,
     classify_agnor: Optional[bool] = False,
+    overlay: Optional[bool] = False,
     datetime: Optional[str] = None) -> None:
     """Save a `labelme` annotation from a segmented input image.
 
@@ -35,13 +58,12 @@ def create_annotation(
         original_image_shape (Tuple[int, int]): Height and width of the input image.
         hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
         classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
+        overlay (Optional[bool], optional): Whether or not to save the segmentation overlay.
         datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
     """
     annotation_directory = Path(annotation_directory)
     output_directory = Path(output_directory)
     source_image_path = Path(source_image_path)
-    overlay_directory = output_directory.joinpath("overlay")
-    overlay_directory.mkdir(exist_ok=True)
 
     logging.debug(f"Saving image annotations from {source_image_path.name} annotations to {str(annotation_directory)}")
     height = original_image_shape[0]
@@ -139,13 +161,14 @@ def create_annotation(
 
     prediction = color_classes(prediction)
     prediction = cv2.cvtColor(prediction, cv2.COLOR_BGR2RGB)
+    # Zero background pixels so it does not mess with the overlay.
     prediction[prediction == 130] = 0
-
-    alpha = 0.8
-    beta = 0.1
-    gamma = 0.0
-    overlay = cv2.addWeighted(input_image, alpha, prediction, beta, gamma)
-    cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.name}.jpg")), overlay)
+    
+    if overlay:
+        overlay_directory = output_directory.joinpath("overlay")
+        overlay_directory.mkdir(exist_ok=True)
+        overlay = get_segmentation_overlay(input_image, prediction)
+        cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.name}.jpg")), overlay)
 
 
 def update_annotation(
@@ -159,6 +182,7 @@ def update_annotation(
     original_image_shape: Tuple[int, int],
     hashfile: Optional[str] = None,
     classify_agnor: Optional[bool] = False,
+    overlay: Optional[bool] = False,
     datetime: Optional[str] = None) -> None:
     """Update an existing annotation file considering bounding boxes.
 
@@ -172,13 +196,12 @@ def update_annotation(
         original_image_shape (Tuple[int, int]): Height and width of the input image.
         hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
         classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
+        overlay (Optional[bool], optional): Whether or not to save the segmentation overlay.
         datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
     """
     annotation_directory = Path(annotation_directory)
     output_directory = Path(output_directory)
     source_image_path = Path(source_image_path)
-    overlay_directory = output_directory.parent.joinpath("overlay")
-    overlay_directory.mkdir(exist_ok=True)
 
     logging.debug(f"Updating annotations from {source_image_path.name}")
 
@@ -189,7 +212,7 @@ def update_annotation(
         patient = annotation["patient"]
     elif patient != "":
         annotation["patient"] = patient
-    
+
     annotation["imageHash"] = hashfile
 
     logging.debug("Analyze contours")
@@ -219,11 +242,11 @@ def update_annotation(
     i = 0
     for rectangle in bounding_boxes_shapes:
         annotation["shapes"].append(rectangle)
-        
+
         # Convert rectangle points so it can be used in OpenCV to filter other contours
         rectangle = convert_bbox_to_contour(rectangle["points"].copy())
         rectangle = rectangle.reshape((rectangle.shape[0], 1, rectangle.shape[1]))
-        
+
         filtered_parent_contours, _ = contour_analysis.discard_contours_outside_contours([rectangle], parent_contours)
         for parent_contour in filtered_parent_contours:
             filtered_child_contour, _ = contour_analysis.discard_contours_outside_contours([parent_contour], child_contours)
@@ -283,10 +306,11 @@ def update_annotation(
 
     prediction = color_classes(prediction)
     prediction = cv2.cvtColor(prediction, cv2.COLOR_BGR2RGB)
+    # Zero background pixels so it does not mess with the overlay.
     prediction[prediction == 130] = 0
 
-    alpha = 0.8
-    beta = 0.1
-    gamma = 0.0
-    overlay = cv2.addWeighted(input_image, alpha, prediction, beta, gamma)
-    cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.stem}.jpg")), overlay)
+    if overlay:
+        overlay_directory = output_directory.parent.joinpath("overlay")
+        overlay_directory.mkdir(exist_ok=True)
+        overlay = get_segmentation_overlay(input_image, prediction)
+        cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.stem}.jpg")), overlay)
