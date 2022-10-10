@@ -297,8 +297,9 @@ def update_annotation(
 
             contour_analysis.write_contour_measurements(
                 measurements=measurements,
-                output_path=annotation_directory,
-                datetime=datetime)
+                output_path=annotation_directory.parent,
+                datetime=datetime,
+                overwrite=True)
 
     logging.debug("Write annotation file")
     with open(annotation_path, "w") as output_file:

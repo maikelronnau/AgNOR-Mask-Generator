@@ -453,23 +453,28 @@ def get_contour_measurements(
 def write_contour_measurements(
     measurements: List[dict],
     output_path: str,
-    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S')) -> None:
+    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S'),
+    overwrite: Optional[bool] = False) -> None:
     """Writes contour measurements to `.csv` files.
 
     Args:
         parent_measurements (List[dict]): The parent contours.
         output_path (str): The path where the files should be written to.
         datetime (Optional[str], optional): A date and time identification for when the files were generated. Defaults to time.strftime('%Y%m%d%H%M%S').
+        overwrite (Optional[bool], optional): Whether or not to overwrite the existing file.
     """
     df = pd.DataFrame(measurements, columns=MEASUREMENT_COLUMNS)
     df["datetime"] = datetime
 
     output_file = Path(output_path).joinpath(f"nucleus_agnor_measurements.csv")
 
-    if Path(output_file).is_file():
-        df.to_csv(str(output_file), mode="a", header=False, index=False)
-    else:
+    if overwrite:
         df.to_csv(str(output_file), mode="w", header=True, index=False)
+    else:
+        if Path(output_file).is_file():
+            df.to_csv(str(output_file), mode="a", header=False, index=False)
+        else:
+            df.to_csv(str(output_file), mode="w", header=True, index=False)
 
 
 def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarray]:

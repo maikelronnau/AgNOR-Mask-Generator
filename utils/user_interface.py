@@ -28,13 +28,11 @@ def clear_fields(window: sg.Window):
         window (sg.Window): The window handler.
     """
     window["-INPUT-DIRECTORY-"]("")
-    window["-OUTPUT-DIRECTORY-"]("")
     window["-PATIENT-"]("")
     window["-OPEN-LABELME-"](False)
     window["-CLASSIFY-AGNOR-"](False)
     window["-USE-BOUNDING-BOXES-"](False)
     window["-GENERATE-OVERLAY-"](False)
-    window["-OUTPUT-DIRECTORY-"].update(disabled=False)
     window["-PATIENT-"].update(disabled=False)
 
 
@@ -55,11 +53,6 @@ def get_layout() -> List[list]:
         [
             sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"]),
             sg.In(size=(70, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"]),
-            sg.FolderBrowse()
-        ],
-        [
-            sg.Text("Output Directory\t", text_color="white", font=MAIN_FONT),
-            sg.In(size=(70, 1), enable_events=True, key="-OUTPUT-DIRECTORY-"),
             sg.FolderBrowse()
         ],
         [
