@@ -38,6 +38,7 @@ def create_annotation(
     input_image: np.ndarray,
     prediction: np.ndarray,
     patient: str,
+    patient_group: str,
     annotation_directory: str,
     output_directory: str,
     source_image_path: str,
@@ -52,6 +53,7 @@ def create_annotation(
         input_image (np.ndarray): The input image.
         prediction (np.ndarray): The segmented image.
         patient (str): The identification of the patient.
+        patient_group (str): The group the patient belongs to.
         annotation_directory (str): Path where to save the annotations.
         output_directory (str): Path where to save the segmentation measurements.
         source_image_path (str): Input image path.
@@ -77,6 +79,7 @@ def create_annotation(
         "imageHeight": height,
         "imageWidth": width,
         "patient": patient,
+        "group": patient_group,
         "imagePath": source_image_path.name,
         "imageHash": hashfile,
         "dateTime": datetime,
@@ -168,13 +171,14 @@ def create_annotation(
         overlay_directory = output_directory.joinpath("overlay")
         overlay_directory.mkdir(exist_ok=True)
         overlay = get_segmentation_overlay(input_image, prediction)
-        cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.name}.jpg")), overlay)
+        cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.stem}.jpg")), overlay)
 
 
 def update_annotation(
     input_image: np.ndarray,
     prediction: np.ndarray,
     patient: str,
+    patient_group: str,
     annotation_directory: str,
     output_directory: str,
     source_image_path: str,
@@ -190,6 +194,7 @@ def update_annotation(
         input_image (np.ndarray): The input image.
         prediction (np.ndarray): The segmented image.
         patient (str): The identification of the patient.
+        patient_group (str): The group the patient belongs to.
         annotation_path (str): Path of the annotation file to be updated.
         output_directory (str): Path where to save the segmentation measurements.
         source_image_path (str): Input image path.
@@ -212,6 +217,8 @@ def update_annotation(
         patient = annotation["patient"]
     elif patient != "":
         annotation["patient"] = patient
+    if patient_group != "":
+        annotation["group"] = patient_group
 
     annotation["imageHash"] = hashfile
 

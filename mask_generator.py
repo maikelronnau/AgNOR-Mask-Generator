@@ -1,4 +1,5 @@
 import argparse
+from audioop import mul
 import logging
 import time
 from pathlib import Path
@@ -39,6 +40,7 @@ def main():
         logging.debug(f"Program started at `{datetime}`")
 
         window = user_interface.get_window()
+        advanced = False
         status = window["-STATUS-"]
         update_status = True
 
@@ -57,157 +59,107 @@ def main():
             if event == "-CLOSE-":
                 logging.debug("Close was pressed")
                 break
+            if event == "-ADVANCED-":
+                if advanced:
+                    advanced = False
+                    window["-ADVANCED-"].update("\nAdvanced options ↓")
+                else:
+                    advanced = True
+                    window["-ADVANCED-"].update("\nAdvanced options ↑")
+                window["-USE-BOUNDING-BOXES-"].update(visible=advanced)
+                window["-GENERATE-OVERLAY-"].update(visible=advanced)
+                window["-MULTIPLE-PATIENTS-"].update(visible=advanced)
+            if event == "-USE-BOUNDING-BOXES-":
+                if values["-USE-BOUNDING-BOXES-"]:
+                    window["-PATIENT-"].update(disabled=True)
+                    window["-PATIENT-GROUP-"].update(disabled=True)
+                else:
+                    window["-PATIENT-"].update(disabled=False)
+                    window["-PATIENT-GROUP-"].update(disabled=False)
+                    window["-PATIENT-"]("")
+                    window["-PATIENT-GROUP-"]("")
 
             # Folder name was filled in, make a list of files in the folder
             if event == "-OK-":
                 if values["-INPUT-DIRECTORY-"] == "":
                     logging.debug("OK was pressed without a directory being selected")
-                    status.update("Status: select a directory")
+                    status.update("Please select a directory to start")
+                    continue
+                if values["-PATIENT-"] == "" and not values["-MULTIPLE-PATIENTS-"]:
+                    logging.debug("OK was pressed without patient information")
+                    status.update("Please please insert patient")
                     continue
 
                 patient = values["-PATIENT-"]
-                input_directory = values["-INPUT-DIRECTORY-"]
-                input_directory = Path(input_directory)
-                if input_directory.is_file():
-                    input_directory = str(input_directory.parent)
-                else:
-                    input_directory = str(input_directory)
-                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {patient}")
-                bboxes = values["-USE-BOUNDING-BOXES-"]
+                patient_group = values["-PATIENT-GROUP-"]
                 classify_agnor = values["-CLASSIFY-AGNOR-"]
+                bboxes = values["-USE-BOUNDING-BOXES-"]
                 overlay = values["-GENERATE-OVERLAY-"]
+                multiple_patients = values["-MULTIPLE-PATIENTS-"]
+                base_directory = Path(values["-INPUT-DIRECTORY-"])
 
-                # Bboxed annotations -> bboxed annotations
-                if bboxes:
-                    if input_directory is not None:
-                        logging.debug("Bounding boxed images/annotations -> bounding boxed annotations")
-                        try:
-                            logging.debug(f"Loading images from '{input_directory}'")
-                            images = list_files(input_directory, as_numpy=True)
-                            logging.debug(f"Total of {len(images)} images found")
-                            if len(images) == 0:
-                                status.update("Status: no images found!")
-                                logging.debug("No images were found")
-                                continue
-
-                            logging.debug(f"Loading annotations from '{input_directory}'")
-                            annotations = list_files(input_directory, as_numpy=True, file_types=[".json"])
-                            logging.debug(f"Total of {len(annotations)} annotations found")
-                            if len(annotations) == 0:
-                                status.update("Status: no annotations found!")
-                                logging.debug("No annotations were found")
-                                continue
-
-                            if len(images) != len(annotations):
-                                message = f"Number of images and annotations does no match ({len(images)} images, {len(annotations)} annotations"
-                                logging.warning(message)
-                                if len(images) > len(annotations):
-                                    logging.warning("Number of images is higher than the number of annotations")
-                                else:
-                                    logging.warning("Number of annotations is higher than the number of images")
-
-                                logging.warning("Filtering image files to those an annotation file was found")
-                                images_with_annotations = []
-                                annotation_stems = [Path(annotation_path).stem for annotation_path in annotations]
-                                annotations = []
-                                for image_path in images:
-                                    image_stem = Path(image_path).stem
-                                    if image_stem in annotation_stems:
-                                        images_with_annotations.append(image_path)
-                                        annotations.append(Path(image_path).parent.joinpath(f"{image_stem}.json"))
-                                images = images_with_annotations
-
-                            output_directory = input_directory
-
-                            status.update("Status: processing")
-                            event, values = window.read(timeout=0)
-
-                            # Load and process each image and annotation
-                            logging.debug("Start processing images and annotations")
-                            for i, (image_path, annotation_path) in enumerate(zip(images, annotations)):
-                                logging.debug(f"Processing image {image_path} and annotation {annotation_path}")
-                                if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
-                                    if not i + 1 == len(images):
-                                        user_interface.clear_fields(window)
-                                        status.update("Status: canceled by the user")
-                                        update_status = False
-                                        break
-
-                                image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-                                image_original = image.copy()
-                                logging.debug(f"Shape {image.shape}")
-                                original_shape = image.shape[:2]
-
-                                image = tf.cast(image, dtype=tf.float32)
-                                image = image / 255.
-                                image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
-                                image_tensor[0, :, :, :] = image
-
-                                logging.debug("Predict")
-                                prediction = model.predict_on_batch(image_tensor)[0]
-                                prediction = collapse_probabilities(prediction, pixel_intensity=127)
-
-                                hashfile = get_hash_file(image_path)
-
-                                update_annotation(
-                                    input_image=image_original,
-                                    prediction=prediction,
-                                    patient=patient,
-                                    annotation_directory=str(input_directory),
-                                    output_directory=str(output_directory),
-                                    source_image_path=image_path,
-                                    annotation_path=annotation_path,
-                                    original_image_shape=original_shape,
-                                    hashfile=hashfile,
-                                    classify_agnor=classify_agnor,
-                                    overlay=overlay,
-                                    datetime=datetime
-                                )
-
-                                tf.keras.backend.clear_session()
-                                logging.debug(f"Done processing image {image_path}")
-
-                            if values["-OPEN-LABELME-"]:
-                                status.update("Status: opening labelme, please wait...")
-                                open_with_labelme(str(input_directory))
-                        except Exception as e:
-                            logging.error(f"{e.message}")
+                if base_directory.is_dir():
+                    if multiple_patients:
+                        directories = [directory for directory in base_directory.glob("*") if directory.is_dir()]
                     else:
-                        logging.debug("Input directory is `None`")
-                        status.update("Select an input directory")
-                        continue
+                        directories = [str(base_directory)]
                 else:
-                    # Images -> annotations
-                    if patient is not None and patient != "":
-                        if input_directory is not None and input_directory != "":
-                            logging.debug("Images -> annotations")
+                    raise FileNotFoundError(f"The directory '{base_directory}' was not found.")
+
+                for input_directory in directories:
+                    # Bboxed annotations -> bboxed annotations
+                    if bboxes:
+                        if input_directory is not None:
+                            logging.debug("Bounding boxed images/annotations -> bounding boxed annotations")
                             try:
                                 logging.debug(f"Loading images from '{input_directory}'")
                                 images = list_files(input_directory, as_numpy=True)
                                 logging.debug(f"Total of {len(images)} images found")
                                 if len(images) == 0:
-                                    status.update("Status: no images found!")
                                     logging.debug("No images were found")
+                                    status.update("No images found!")
                                     continue
 
-                                logging.debug("Create output directories")
-                                output_directory.mkdir(exist_ok=True)
-                                logging.debug(f"Created '{str(output_directory)}' directory")
-                                annotation_directory = output_directory.joinpath("annotations")
-                                annotation_directory.mkdir(exist_ok=True)
-                                logging.debug(f"Created '{str(annotation_directory)}' directory")
+                                logging.debug(f"Loading annotations from '{input_directory}'")
+                                annotations = list_files(input_directory, as_numpy=True, file_types=[".json"])
+                                logging.debug(f"Total of {len(annotations)} annotations found")
+                                if len(annotations) == 0:
+                                    logging.debug("No annotations were found")
+                                    status.update("No annotations found!")
+                                    continue
 
-                                status.update("Status: processing")
+                                if len(images) != len(annotations):
+                                    message = f"Number of images and annotations does no match ({len(images)} images, {len(annotations)} annotations"
+                                    logging.warning(message)
+                                    if len(images) > len(annotations):
+                                        logging.warning("Number of images is higher than the number of annotations")
+                                    else:
+                                        logging.warning("Number of annotations is higher than the number of images")
+
+                                    logging.warning("Filtering image files to those an annotation file was found")
+                                    images_with_annotations = []
+                                    annotation_stems = [Path(annotation_path).stem for annotation_path in annotations]
+                                    annotations = []
+                                    for image_path in images:
+                                        image_stem = Path(image_path).stem
+                                        if image_stem in annotation_stems:
+                                            images_with_annotations.append(image_path)
+                                            annotations.append(Path(image_path).parent.joinpath(f"{image_stem}.json"))
+                                    images = images_with_annotations
+
+                                output_directory = input_directory
+
+                                status.update("Processing")
                                 event, values = window.read(timeout=0)
 
-                                # Load and process each image
-                                logging.debug("Start processing images")
-                                for i, image_path in enumerate(images):
-                                    logging.debug(f"Processing image {image_path}")
+                                # Load and process each image and annotation
+                                logging.debug("Start processing images and annotations")
+                                for i, (image_path, annotation_path) in enumerate(zip(images, annotations)):
+                                    logging.debug(f"Processing image {image_path} and annotation {annotation_path}")
                                     if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
                                         if not i + 1 == len(images):
                                             user_interface.clear_fields(window)
-                                            status.update("Status: canceled by the user")
+                                            status.update("Canceled by the user")
                                             update_status = False
                                             break
 
@@ -227,13 +179,15 @@ def main():
 
                                     hashfile = get_hash_file(image_path)
 
-                                    create_annotation(
+                                    update_annotation(
                                         input_image=image_original,
                                         prediction=prediction,
                                         patient=patient,
-                                        annotation_directory=str(annotation_directory),
+                                        patient_group=patient_group,
+                                        annotation_directory=str(input_directory),
                                         output_directory=str(output_directory),
                                         source_image_path=image_path,
+                                        annotation_path=annotation_path,
                                         original_image_shape=original_shape,
                                         hashfile=hashfile,
                                         classify_agnor=classify_agnor,
@@ -244,26 +198,110 @@ def main():
                                     tf.keras.backend.clear_session()
                                     logging.debug(f"Done processing image {image_path}")
 
-                                if values["-OPEN-LABELME-"]:
-                                    status.update("Status: opening labelme, please wait...")
-                                    open_with_labelme(str(annotation_directory))
-
+                                if values["-OPEN-LABELME-"] and not multiple_patients:
+                                    status.update("Opening labelme, please wait...")
+                                    open_with_labelme(str(input_directory))
                             except Exception as e:
                                 logging.error(f"{e.message}")
                         else:
-                            message = "Input directory is `None` or empty"
-                            logging.error(message)
-                            raise ValueError(message)
+                            logging.debug("Input directory is `None`")
+                            status.update("Select an input directory")
+                            continue
                     else:
-                        message = "Provide the information to continue"
-                        status.update(message)
-                        logging.debug(message)
-                        continue
+                        # Images -> annotations
+                        if patient is not None and patient != "" or multiple_patients:
+                            if input_directory is not None and input_directory != "":
+                                logging.debug("Images -> annotations")
+                                try:
+                                    logging.debug(f"Loading images from '{input_directory}'")
+                                    images = list_files(input_directory, as_numpy=True)
+                                    logging.debug(f"Total of {len(images)} images found")
+                                    if len(images) == 0:
+                                        logging.debug("No images were found")
+                                        status.update("No images found!")
+                                        continue
+
+                                    logging.debug("Create output directories")
+                                    if multiple_patients:
+                                        output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {input_directory.name}")
+                                    else:
+                                        output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {patient}")
+                                    output_directory.mkdir(exist_ok=True)
+                                    logging.debug(f"Created '{str(output_directory)}' directory")
+                                    annotation_directory = output_directory.joinpath("annotations")
+                                    annotation_directory.mkdir(exist_ok=True)
+                                    logging.debug(f"Created '{str(annotation_directory)}' directory")
+
+                                    status.update("Processing")
+                                    event, values = window.read(timeout=0)
+
+                                    # Load and process each image
+                                    logging.debug("Start processing images")
+                                    for i, image_path in enumerate(images):
+                                        logging.debug(f"Processing image {image_path}")
+                                        if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
+                                            if not i + 1 == len(images):
+                                                user_interface.clear_fields(window)
+                                                status.update("Canceled by the user")
+                                                update_status = False
+                                                break
+
+                                        image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+                                        image_original = image.copy()
+                                        logging.debug(f"Shape {image.shape}")
+                                        original_shape = image.shape[:2]
+
+                                        image = tf.cast(image, dtype=tf.float32)
+                                        image = image / 255.
+                                        image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
+                                        image_tensor[0, :, :, :] = image
+
+                                        logging.debug("Predict")
+                                        prediction = model.predict_on_batch(image_tensor)[0]
+                                        prediction = collapse_probabilities(prediction, pixel_intensity=127)
+
+                                        hashfile = get_hash_file(image_path)
+
+                                        create_annotation(
+                                            input_image=image_original,
+                                            prediction=prediction,
+                                            patient=patient,
+                                            patient_group=patient_group,
+                                            annotation_directory=str(annotation_directory),
+                                            output_directory=str(output_directory),
+                                            source_image_path=image_path,
+                                            original_image_shape=original_shape,
+                                            hashfile=hashfile,
+                                            classify_agnor=classify_agnor,
+                                            overlay=overlay,
+                                            datetime=datetime
+                                        )
+
+                                        tf.keras.backend.clear_session()
+                                        logging.debug(f"Done processing image {image_path}")
+
+                                    if values["-OPEN-LABELME-"] and not multiple_patients:
+                                        status.update("Opening labelme, please wait...")
+                                        open_with_labelme(str(annotation_directory))
+
+                                except Exception as e:
+                                    logging.error(f"{e.message}")
+                            else:
+                                message = "Input directory is `None` or empty"
+                                logging.error(message)
+                                raise ValueError(message)
+                        else:
+                            message = "Provide the information to continue"
+                            logging.debug(message)
+                            status.update(message)
+                            continue
+                if values["-OPEN-LABELME-"] and multiple_patients:
+                    open_with_labelme(str(base_directory))
             else:
                 update_status = False
 
             if update_status:
-                status.update("Status: done!")
+                status.update("Done!")
                 user_interface.clear_fields(window)
             else:
                 update_status = True
