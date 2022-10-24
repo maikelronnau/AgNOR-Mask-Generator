@@ -479,7 +479,7 @@ def write_contour_measurements(
 
     parent_measurements_output = Path(output_path).joinpath(f"nuclei_measurements_{datetime}.csv")
     child_measurements_output = Path(output_path).joinpath(f"nor_measurements_{datetime}.csv")
-    
+
     if not ignore_parent:
         if Path(parent_measurements_output).is_file():
             df_parent.to_csv(str(parent_measurements_output), mode="a", header=False, index=False)
@@ -554,7 +554,7 @@ def discard_unboxed_contours(
                     nuclei_contours_adequate_final.append(contour)
         parent_contours = nuclei_contours_adequate_final
         child_contours, _ = discard_contours_outside_contours(parent_contours, child_contours)
-        
+
         # Create a new mask with the filtered nuclei and NORs
         pixel_intensity = int(np.max(np.unique(prediction)))
         background = np.ones(prediction.shape[:2], dtype=np.uint8)
@@ -567,5 +567,5 @@ def discard_unboxed_contours(
         nucleus = np.where(nor, 0, nucleus)
         background = np.where(np.logical_and(nucleus == 0, nor == 0), pixel_intensity, 0)
         prediction = np.stack([background, nucleus, nor], axis=2).astype(np.uint8)
-    
+
     return prediction, parent_contours, child_contours

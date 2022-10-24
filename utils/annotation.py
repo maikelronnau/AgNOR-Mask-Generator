@@ -167,7 +167,7 @@ def create_annotation(
     prediction = cv2.cvtColor(prediction, cv2.COLOR_BGR2RGB)
     # Zero background pixels so it does not mess with the overlay.
     prediction[prediction == 130] = 0
-    
+
     if overlay:
         overlay_directory = output_directory.joinpath("overlay")
         overlay_directory.mkdir(exist_ok=True)

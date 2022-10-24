@@ -171,9 +171,6 @@ def main():
                                 status.update("Processing")
                                 event, values = window.read(timeout=0)
 
-                                # Remove old .csv files if they exist
-                                
-
                                 # Load and process each image and annotation
                                 logging.debug("Start processing images and annotations")
                                 for i, (image_path, annotation_path) in enumerate(zip(images, annotations)):
