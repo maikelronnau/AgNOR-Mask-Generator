@@ -71,13 +71,30 @@ def main():
                 window["-MULTIPLE-PATIENTS-"].update(visible=advanced)
             if event == "-USE-BOUNDING-BOXES-":
                 if values["-USE-BOUNDING-BOXES-"]:
-                    window["-PATIENT-"].update(disabled=True)
-                    window["-PATIENT-GROUP-"].update(disabled=True)
+                    if not values["-MULTIPLE-PATIENTS-"]:
+                        window["-PATIENT-"].update(disabled=True)
+                        window["-PATIENT-"]("")
+                        window["-PATIENT-GROUP-"].update(disabled=True)
+                        window["-PATIENT-GROUP-"]("")
                 else:
-                    window["-PATIENT-"].update(disabled=False)
-                    window["-PATIENT-GROUP-"].update(disabled=False)
-                    window["-PATIENT-"]("")
-                    window["-PATIENT-GROUP-"]("")
+                    if values["-MULTIPLE-PATIENTS-"]:
+                        window["-PATIENT-GROUP-"].update(disabled=False)
+                    else:
+                        window["-PATIENT-"].update(disabled=False)
+                        window["-PATIENT-GROUP-"].update(disabled=False)
+            if event == "-MULTIPLE-PATIENTS-":
+                if values["-MULTIPLE-PATIENTS-"]:
+                    if values["-USE-BOUNDING-BOXES-"]:
+                        window["-PATIENT-GROUP-"].update(disabled=False)
+                    else:
+                        window["-PATIENT-"].update(disabled=True)
+                        window["-PATIENT-"]("")
+                else:
+                    if values["-USE-BOUNDING-BOXES-"]:
+                        window["-PATIENT-GROUP-"].update(disabled=True)
+                    else:
+                        window["-PATIENT-"].update(disabled=False)
+                        window["-PATIENT-GROUP-"].update(disabled=False)
 
             # Folder name was filled in, make a list of files in the folder
             if event == "-OK-":
@@ -85,10 +102,11 @@ def main():
                     logging.debug("OK was pressed without a directory being selected")
                     status.update("Please select a directory to start")
                     continue
-                if values["-PATIENT-"] == "" and not values["-MULTIPLE-PATIENTS-"]:
-                    logging.debug("OK was pressed without patient information")
-                    status.update("Please please insert patient")
-                    continue
+                if values["-PATIENT-"] == "":
+                    if not (values["-MULTIPLE-PATIENTS-"] or values["-USE-BOUNDING-BOXES-"]):
+                        logging.debug("OK was pressed without patient information")
+                        status.update("Please please insert patient")
+                        continue
 
                 patient = values["-PATIENT-"]
                 patient_group = values["-PATIENT-GROUP-"]
@@ -228,7 +246,7 @@ def main():
                                         output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {patient}")
                                     output_directory.mkdir(exist_ok=True)
                                     logging.debug(f"Created '{str(output_directory)}' directory")
-                                    annotation_directory = output_directory.joinpath("annotations")
+                                    annotation_directory = output_directory
                                     annotation_directory.mkdir(exist_ok=True)
                                     logging.debug(f"Created '{str(annotation_directory)}' directory")
 

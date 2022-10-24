@@ -59,7 +59,7 @@ def get_layout() -> List[list]:
             sg.InputText(size=(70, 1), key="-PATIENT-", tooltip=TOOLTIPS["patient"], pad=((5, 0), (0, 6)))
         ],
         [
-            sg.Text(f"{' ' * 4}Patient group\t", text_color="white", font=MAIN_FONT, key="-MULTIPLE-PATIENTS-TEXT-", tooltip=TOOLTIPS["patient_class"]),
+            sg.Text(f"{' ' * 4}Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_class"]),
             sg.In(size=(70, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"]),
             sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
         ],
@@ -80,7 +80,7 @@ def get_layout() -> List[list]:
             sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"], visible=False)
         ],
         [
-            sg.Checkbox("Multiple patients per directory", default=False, text_color="white", key="-MULTIPLE-PATIENTS-", font=SECONDARY_FONT, tooltip=TOOLTIPS["multiple_patients"], visible=False),
+            sg.Checkbox("Multiple patients per directory", default=False, text_color="white", enable_events=True, key="-MULTIPLE-PATIENTS-", font=SECONDARY_FONT, tooltip=TOOLTIPS["multiple_patients"], visible=False),
         ],
         [
             sg.Text("", text_color="white", key="-STATUS-", font=SECONDARY_FONT, pad=((0, 0), (10, 0)))

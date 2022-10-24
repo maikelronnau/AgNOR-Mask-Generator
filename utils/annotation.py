@@ -304,7 +304,7 @@ def update_annotation(
 
             contour_analysis.write_contour_measurements(
                 measurements=measurements,
-                output_path=annotation_directory.parent,
+                output_path=annotation_directory,
                 datetime=datetime,
                 overwrite=True)
 
@@ -318,7 +318,7 @@ def update_annotation(
     prediction[prediction == 130] = 0
 
     if overlay:
-        overlay_directory = output_directory.parent.joinpath("overlay")
+        overlay_directory = output_directory.joinpath("overlay")
         overlay_directory.mkdir(exist_ok=True)
         overlay = get_segmentation_overlay(input_image, prediction)
         cv2.imwrite(str(overlay_directory.joinpath(f"{source_image_path.stem}.jpg")), overlay)
