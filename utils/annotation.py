@@ -102,7 +102,7 @@ def create_annotation(
     logging.debug("Obtain contour measurements and append shapes to annotation file")
     for i, parent_contour in enumerate(parent_contours):
         filtered_child_contour, _ = contour_analysis.discard_contours_outside_contours([parent_contour], child_contours)
-        measurements = contour_analysis.get_contour_measurements(
+        parent_measurements, child_measurements = contour_analysis.get_contour_measurements(
             parent_contours=[parent_contour],
             child_contours=filtered_child_contour,
             shape=original_image_shape,
@@ -111,10 +111,10 @@ def create_annotation(
             start_index=i)
 
         if classify_agnor:
-            measurements = contour_analysis.classify_agnor(DECISION_TREE_MODEL_PATH, measurements)
+            child_measurements = contour_analysis.classify_agnor(DECISION_TREE_MODEL_PATH, child_measurements)
             # OpenCV's `drawContours` fails using array slices, so a new matrix must be created, drawn on and assigned to `predictions`.
             satellites = prediction[:, :, 3].copy()
-            for classified_measurement, classified_contour in zip(measurements[1:], filtered_child_contour):
+            for classified_measurement, classified_contour in zip(child_measurements, filtered_child_contour):
                 if classified_measurement["type"] == "satellite":
                     cv2.drawContours(satellites, contours=[classified_contour], contourIdx=-1, color=1, thickness=cv2.FILLED)
             prediction[:, :, 3] = satellites
@@ -133,7 +133,7 @@ def create_annotation(
         }
         annotation["shapes"].append(shape)
 
-        for measurement, contour in zip(measurements[1:], filtered_child_contour):
+        for measurement, contour in zip(child_measurements, filtered_child_contour):
             points = []
             for point in contour:
                 points.append([int(value) for value in point[0]])
@@ -148,7 +148,8 @@ def create_annotation(
             annotation["shapes"].append(shape)
 
         contour_analysis.write_contour_measurements(
-            measurements=measurements,
+            parent_measurements=parent_measurements,
+            child_measurements=child_measurements,
             output_path=output_directory,
             datetime=datetime)
 
@@ -257,7 +258,7 @@ def update_annotation(
         filtered_parent_contours, _ = contour_analysis.discard_contours_outside_contours([rectangle], parent_contours)
         for parent_contour in filtered_parent_contours:
             filtered_child_contour, _ = contour_analysis.discard_contours_outside_contours([parent_contour], child_contours)
-            measurements = contour_analysis.get_contour_measurements(
+            parent_measurements, child_measurements = contour_analysis.get_contour_measurements(
                 parent_contours=[parent_contour],
                 child_contours=filtered_child_contour,
                 shape=original_image_shape,
@@ -266,10 +267,10 @@ def update_annotation(
                 start_index=i)
 
             if classify_agnor:
-                measurements = contour_analysis.classify_agnor(DECISION_TREE_MODEL_PATH, measurements)
+                child_measurements = contour_analysis.classify_agnor(DECISION_TREE_MODEL_PATH, child_measurements)
                 # OpenCV's `drawContours` fails using array slices, so a new matrix must be created, drawn on and assigned to `predictions`.
                 satellites = prediction[:, :, 3].copy()
-                for classified_measurement, classified_contour in zip(measurements[1:], filtered_child_contour):
+                for classified_measurement, classified_contour in zip(child_measurements, filtered_child_contour):
                     if classified_measurement["type"] == "satellite":
                         cv2.drawContours(satellites, contours=[classified_contour], contourIdx=-1, color=1, thickness=cv2.FILLED)
                 prediction[:, :, 3] = satellites
@@ -288,7 +289,7 @@ def update_annotation(
             }
             annotation["shapes"].append(shape)
 
-            for measurement, contour in zip(measurements[1:], filtered_child_contour):
+            for measurement, contour in zip(child_measurements, filtered_child_contour):
                 points = []
                 for point in contour:
                     points.append([int(value) for value in point[0]])
@@ -303,10 +304,10 @@ def update_annotation(
                 annotation["shapes"].append(shape)
 
             contour_analysis.write_contour_measurements(
-                measurements=measurements,
-                output_path=annotation_directory,
-                datetime=datetime,
-                overwrite=True)
+                parent_measurements=parent_measurements,
+                child_measurements=child_measurements,
+                output_path=output_directory,
+                datetime=datetime)
 
     logging.debug("Write annotation file")
     with open(annotation_path, "w") as output_file:

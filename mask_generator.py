@@ -125,6 +125,7 @@ def main():
                     raise FileNotFoundError(f"The directory '{base_directory}' was not found.")
 
                 for input_directory in directories:
+                    datetime = f"{time.strftime('%Y%m%d%H%M%S')}"
                     # Bboxed annotations -> bboxed annotations
                     if bboxes:
                         if input_directory is not None:
@@ -169,6 +170,9 @@ def main():
 
                                 status.update("Processing")
                                 event, values = window.read(timeout=0)
+
+                                # Remove old .csv files if they exist
+                                
 
                                 # Load and process each image and annotation
                                 logging.debug("Start processing images and annotations")

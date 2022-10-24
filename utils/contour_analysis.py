@@ -13,18 +13,27 @@ from utils.utils import (color_classes, convert_bbox_to_contour,
                          get_intersection, get_labelme_points)
 
 
-MEASUREMENT_COLUMNS = [
-    "patient",
+NUCLEUS_COLUMNS = [
+    "patient_id",
     "source_image",
-    "id",
-    "parent_id",
+    "flag",
+    "class",
+    "nucleus",
+    "nucleus_pixel_count",
+    "type"]
+
+AGNOR_COLUMNS = [
+    "patient_id",
+    "source_image",
+    "flag",
+    "class",
+    "nucleus",
+    "agnor",
+    "agnor_pixel_count",
     "type",
-    "pixel_count",
     "nucleus_ratio",
-    "smallest_agnor_ratio",
     "greatest_agnor_ratio",
-    "flag"
-]
+    "smallest_agnor_ratio"]
 
 CLASSES = [
     "control",
@@ -389,15 +398,13 @@ def get_contour_measurements(
     child_contours: List[np.ndarray],
     shape: Tuple[int, int],
     mask_name: str,
-    min_contour_size: Optional[int] = None,
-    max_contour_size: Optional[int] = None,
     parent_type: Optional[str] = "nucleus",
-    child_type: Optional[str] = "agnor",
+    child_type: Optional[str] = "cluster",
     record_id: Optional[str] = "unknown",
+    record_class: Optional[str] = "unknown",
     start_index: Optional[int] = 0,
     contours_flag: Optional[str] = "valid") -> Union[List[dict], List[dict], int, int]:
     """Calculate the number of pixels per contour and create a record for each of them.
-
     Args:
         parent_contours (List[np.ndarray]): The parent contours.
         child_contours (List[np.ndarray]): The child contours.
@@ -408,18 +415,19 @@ def get_contour_measurements(
         parent_type (Optional[str], optional): The type of the parent contour. Defaults to "nucleus".
         child_type (Optional[str], optional): The type of the child contour. Usually one of `["cluster", "satellite"]`. Defaults to "cluster".
         record_id (Optional[str]): The unique ID of the record. Defaults to "unknown".
+        record_class (Optional[str]): The class the record belongs to. Must be one of `["control", "leukoplakia", "carcinoma", "unknown"]`. Defaults to "unknown".
         start_index (Optional[int], optional): The index to start the parent contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
         contours_flag (Optional[str], optional): A string value identifying the characteristic of the record. Usually it will be `valid`, but it can be `discarded` or anything else. Defaults to "valid".
-
     Returns:
-        List[dict]: A list containing the contours and its measurements.
+        Union[List[dict], List[dict], int, int]: The parent and child contours, and the pixel count of the smallest and biggest AgNOR.
     """
-    measurements = []
+    parent_measurements = []
+    child_measurements = []
 
     for parent_id, parent_contour in enumerate(parent_contours, start=start_index):
         parent_pixel_count = get_contour_pixel_count(parent_contour, shape)
-        parent_features = [record_id, mask_name, parent_id, None, parent_type, parent_pixel_count, None, None, None, contours_flag]
-        measurements.append({ key: value for key, value in zip(MEASUREMENT_COLUMNS, parent_features) })
+        parent_features = [record_id, mask_name, contours_flag, record_class, parent_id, parent_pixel_count, parent_type]
+        parent_measurements.append({ key: value for key, value in zip(NUCLEUS_COLUMNS, parent_features) })
 
         contours_size = []
 
@@ -429,61 +437,67 @@ def get_contour_measurements(
                 if cv2.pointPolygonTest(parent_contour, tuple(child_point[0]), False) >= 0:
                     child_pixel_count = get_contour_pixel_count(child_contour, shape)
                     contours_size.append(child_pixel_count)
-                    child_features = [record_id, mask_name, child_id, parent_id, child_type, child_pixel_count]
-                    measurements.append({ key: value for key, value in zip(MEASUREMENT_COLUMNS, child_features)})
+                    parent_pixel_count_ratio = child_pixel_count / parent_pixel_count
+                    child_features = [record_id, mask_name, contours_flag, record_class, parent_id, child_id, child_pixel_count, child_type, parent_pixel_count_ratio]
+                    child_measurements.append({ key: value for key, value in zip(AGNOR_COLUMNS, child_features) })
                     child_id += 1
                     break
 
-    if len (contours_size) > 0:
+    if len(contours_size) > 0:
         min_contour_size = np.min(contours_size)
         max_contour_size = np.max(contours_size)
 
-        for i, record in enumerate(measurements):
-            if record["parent_id"] is not None:
-                features = list(record.values())
-                features.append(record["pixel_count"] / measurements[0]["pixel_count"])
-                features.append(record["pixel_count"] / max_contour_size)
-                features.append(record["pixel_count"] / min_contour_size)
-                features.append(contours_flag)
-                measurements[i] = {key: value for key, value in zip(MEASUREMENT_COLUMNS, features)}
+        for i, record in enumerate(child_measurements):
+            features = list(record.values())
+            features.append(record["agnor_pixel_count"] / max_contour_size)
+            features.append(record["agnor_pixel_count"] / min_contour_size)
+            child_measurements[i] = {key: value for key, value in zip(AGNOR_COLUMNS, features)}
 
-    return measurements
+    return parent_measurements, child_measurements
 
 
 def write_contour_measurements(
-    measurements: List[dict],
+    parent_measurements: List[dict],
+    child_measurements: List[dict],
     output_path: str,
-    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S'),
-    overwrite: Optional[bool] = False) -> None:
+    ignore_parent: Optional[bool] = False,
+    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S')) -> None:
     """Writes contour measurements to `.csv` files.
-
     Args:
         parent_measurements (List[dict]): The parent contours.
+        child_measurements (List[dict]): The child contours.
         output_path (str): The path where the files should be written to.
         datetime (Optional[str], optional): A date and time identification for when the files were generated. Defaults to time.strftime('%Y%m%d%H%M%S').
-        overwrite (Optional[bool], optional): Whether or not to overwrite the existing file.
     """
-    df = pd.DataFrame(measurements, columns=MEASUREMENT_COLUMNS)
-    df["datetime"] = datetime
+    df_parent = pd.DataFrame(parent_measurements, columns=NUCLEUS_COLUMNS)
+    df_child = pd.DataFrame(child_measurements, columns=AGNOR_COLUMNS)
 
-    output_file = Path(output_path).joinpath(f"nucleus_agnor_measurements.csv")
+    df_child["nucleus"] = df_parent["nucleus"].unique()[0]
 
-    if overwrite:
-        df.to_csv(str(output_file), mode="w", header=True, index=False)
-    else:
-        if Path(output_file).is_file():
-            df.to_csv(str(output_file), mode="a", header=False, index=False)
+    df_parent["datetime"] = datetime
+    df_child["datetime"] = datetime
+
+    parent_measurements_output = Path(output_path).joinpath(f"nuclei_measurements_{datetime}.csv")
+    child_measurements_output = Path(output_path).joinpath(f"nor_measurements_{datetime}.csv")
+    
+    if not ignore_parent:
+        if Path(parent_measurements_output).is_file():
+            df_parent.to_csv(str(parent_measurements_output), mode="a", header=False, index=False)
         else:
-            df.to_csv(str(output_file), mode="w", header=True, index=False)
+            df_parent.to_csv(str(parent_measurements_output), mode="w", header=True, index=False)
+
+    if Path(child_measurements_output).is_file():
+        df_child.to_csv(str(child_measurements_output), mode="a", header=False, index=False)
+    else:
+        df_child.to_csv(str(child_measurements_output), mode="w", header=True, index=False)
+
 
 
 def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarray]:
     """Loads a Scikit-Learn model and classify the input arrays in `clusters` and `satellites`.
-
     Args:
         model_path (str): Path to the model file.
         contours (List[np.ndarray]): Input array containing the features `agnor_pixel_count`, `nucleus_ratio`, `smallest_agnor_ratio`, `greatest_agnor_ratio`."
-
     Returns:
         List[np.ndarray]: Updated array with a column containing the predicted class of each element in the input array, where `0` corresponds to `cluster` and `1` to `satellite`.
     """
@@ -491,18 +505,18 @@ def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarr
         return contours
 
     features_list = [
-        "pixel_count",
+        "agnor_pixel_count",
         "nucleus_ratio",
         "smallest_agnor_ratio",
         "greatest_agnor_ratio"
     ]
 
     df = pd.DataFrame.from_dict(contours)
-    features = df[df["type"].str.contains("agnor|cluster|satellite")][features_list].copy()
+    features = df[features_list].copy()
 
-    classifier =joblib.load(model_path)
+    classifier = joblib.load(model_path)
     predictions = classifier.predict(features)
-    df.loc[df["type"].str.contains("agnor|cluster|satellite"), "type"] = predictions
+    df["agnor_type"] = predictions
 
     contours = list(df.T.to_dict().values())
     return contours
