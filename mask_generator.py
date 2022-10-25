@@ -15,7 +15,7 @@ from utils.data import list_files
 from utils.model import load_model
 from utils.utils import (DEFAULT_MODEL_INPUT_SHAPE, MODEL_PATH,
                          collapse_probabilities, get_hash_file,
-                         open_with_labelme)
+                         open_with_labelme, pad_along_axis)
 
 
 def main():
@@ -175,7 +175,11 @@ def main():
                                 logging.debug("Start processing images and annotations")
                                 for i, (image_path, annotation_path) in enumerate(zip(images, annotations)):
                                     logging.debug(f"Processing image {image_path} and annotation {annotation_path}")
-                                    if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
+                                    if patient == "":
+                                        key = Path(input_directory).name
+                                    else:
+                                        key = patient
+                                    if not sg.OneLineProgressMeter("Progress", i + 1, len(images), key, orientation="h"):
                                         if not i + 1 == len(images):
                                             user_interface.clear_fields(window)
                                             status.update("Canceled by the user")
@@ -190,10 +194,22 @@ def main():
                                     image = tf.cast(image, dtype=tf.float32)
                                     image = image / 255.
                                     image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
+
+                                    if image.shape[0] != height:
+                                        image = pad_along_axis(image, size=height, axis=0)
+                                    if image.shape[1] != width:
+                                        image = pad_along_axis(image, size=width, axis=1)
+
                                     image_tensor[0, :, :, :] = image
 
                                     logging.debug("Predict")
                                     prediction = model.predict_on_batch(image_tensor)[0]
+
+                                    if original_shape[0] != height:
+                                        prediction = prediction[:original_shape[0], :, :]
+                                    if original_shape[1] != width:
+                                        prediction = prediction[:, :original_shape[1], :]
+
                                     prediction = collapse_probabilities(prediction, pixel_intensity=127)
 
                                     hashfile = get_hash_file(image_path)
@@ -258,7 +274,11 @@ def main():
                                     logging.debug("Start processing images")
                                     for i, image_path in enumerate(images):
                                         logging.debug(f"Processing image {image_path}")
-                                        if not sg.OneLineProgressMeter("Progress", i + 1, len(images), "key", orientation="h"):
+                                        if patient == "":
+                                            key = input_directory.name
+                                        else:
+                                            key = patient
+                                        if not sg.OneLineProgressMeter("Progress", i + 1, len(images), key, orientation="h"):
                                             if not i + 1 == len(images):
                                                 user_interface.clear_fields(window)
                                                 status.update("Canceled by the user")
@@ -273,10 +293,22 @@ def main():
                                         image = tf.cast(image, dtype=tf.float32)
                                         image = image / 255.
                                         image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
+
+                                        if image.shape[0] != height:
+                                            image = pad_along_axis(image, size=height, axis=0)
+                                        if image.shape[1] != width:
+                                            image = pad_along_axis(image, size=width, axis=1)
+
                                         image_tensor[0, :, :, :] = image
 
                                         logging.debug("Predict")
                                         prediction = model.predict_on_batch(image_tensor)[0]
+
+                                        if original_shape[0] != height:
+                                            prediction = prediction[:original_shape[0], :, :]
+                                        if original_shape[1] != width:
+                                            prediction = prediction[:, :original_shape[1], :]
+
                                         prediction = collapse_probabilities(prediction, pixel_intensity=127)
 
                                         hashfile = get_hash_file(image_path)
@@ -302,7 +334,6 @@ def main():
                                     if values["-OPEN-LABELME-"] and not multiple_patients:
                                         status.update("Opening labelme, please wait...")
                                         open_with_labelme(str(annotation_directory))
-
                                 except Exception as e:
                                     logging.error(f"{e.message}")
                             else:
