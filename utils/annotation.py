@@ -16,7 +16,7 @@ def get_segmentation_overlay(
     input_image: np.ndarray,
     prediction: np.ndarray,
     alpha: Optional[float] = 0.8,
-    beta: Optional[float] = 0.1,
+    beta: Optional[float] = 0.4,
     gamma: Optional[float] = 0.0) -> np.ndarray:
     """Overlays the input image and the predicted segmentation.
 
@@ -214,9 +214,7 @@ def update_annotation(
     with open(annotation_path, "r") as annotation_file:
         annotation = json.load(annotation_file)
 
-    if "patient" in annotation.keys():
-        patient = annotation["patient"]
-    elif patient != "":
+    if patient != "":
         annotation["patient"] = patient
     if patient_group != "":
         annotation["group"] = patient_group

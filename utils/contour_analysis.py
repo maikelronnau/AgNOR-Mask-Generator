@@ -478,7 +478,7 @@ def write_contour_measurements(
     df_child["datetime"] = datetime
 
     parent_measurements_output = Path(output_path).joinpath(f"nuclei_measurements_{datetime}.csv")
-    child_measurements_output = Path(output_path).joinpath(f"nor_measurements_{datetime}.csv")
+    child_measurements_output = Path(output_path).joinpath(f"agnor_measurements_{datetime}.csv")
 
     if not ignore_parent:
         if Path(parent_measurements_output).is_file():
@@ -516,7 +516,7 @@ def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarr
 
     classifier = joblib.load(model_path)
     predictions = classifier.predict(features)
-    df["agnor_type"] = predictions
+    df["type"] = predictions
 
     contours = list(df.T.to_dict().values())
     return contours
