@@ -216,8 +216,12 @@ def update_annotation(
 
     if patient != "":
         annotation["patient"] = patient
+    elif "patient" in annotation.keys():
+        patient = annotation["patient"]
     if patient_group != "":
         annotation["group"] = patient_group
+    elif "group" in annotation.keys():
+        patient_group = annotation["group"]
 
     annotation["imageHash"] = hashfile
 
@@ -246,6 +250,8 @@ def update_annotation(
     bounding_boxes_shapes = get_labelme_shapes(annotation_path=annotation_path, shape_types=["rectangle"])
     # Variable to enumerate nucleus during processing
     i = 0
+    # Prevent duplicate annotations by keeping a list of unseen objects
+    unseen_contours = parent_contours
     for rectangle in bounding_boxes_shapes:
         annotation["shapes"].append(rectangle)
 
@@ -253,7 +259,7 @@ def update_annotation(
         rectangle = convert_bbox_to_contour(rectangle["points"].copy())
         rectangle = rectangle.reshape((rectangle.shape[0], 1, rectangle.shape[1]))
 
-        filtered_parent_contours, _ = contour_analysis.discard_contours_outside_contours([rectangle], parent_contours)
+        filtered_parent_contours, unseen_contours = contour_analysis.discard_contours_outside_contours([rectangle], unseen_contours)
         for parent_contour in filtered_parent_contours:
             filtered_child_contour, _ = contour_analysis.discard_contours_outside_contours([parent_contour], child_contours)
             parent_measurements, child_measurements = contour_analysis.get_contour_measurements(

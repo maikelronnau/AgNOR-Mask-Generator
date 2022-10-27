@@ -1,5 +1,4 @@
 import argparse
-from audioop import mul
 import logging
 import time
 from pathlib import Path
@@ -11,6 +10,7 @@ import tensorflow as tf
 
 from utils import user_interface
 from utils.annotation import create_annotation, update_annotation
+from utils.contour_analysis import aggregate_measurements
 from utils.data import list_files
 from utils.model import load_model
 from utils.utils import (DEFAULT_MODEL_INPUT_SHAPE, MODEL_PATH,
@@ -221,6 +221,12 @@ def main():
                             tf.keras.backend.clear_session()
                             logging.debug(f"Done processing image {image_path}")
 
+                        logging.debug(f"Aggregating measurements")
+                        aggregate_measurements(
+                            nucleus_measurements=str(Path(output_directory).joinpath(f"nucleus_measurements_{datetime}.csv")),
+                            agnor_measurements=str(Path(output_directory).joinpath(f"agnor_measurements_{datetime}.csv")),
+                            remove_measurement_files=False)
+
                         if open_labelme and not multiple_patients:
                             status.update("Opening labelme, please wait...")
                             open_with_labelme(str(input_directory))
@@ -240,15 +246,16 @@ def main():
                                 images = []
                             logging.debug(f"Total of {len(images)} images found")
                             if len(images) == 0:
-                                logging.debug("No images were found")
+                                logging.debug("No images found!")
                                 status.update("No images found!")
+                                update_status = False
                                 continue
 
                             logging.debug("Create output directories")
                             if multiple_patients:
-                                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {input_directory.name}")
+                                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y%m%d%H%M')} - {input_directory.name}")
                             else:
-                                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y-%m-%d-%Hh%Mm')} - {patient}")
+                                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y%m%d%H%M')} - {patient}")
                             output_directory.mkdir(exist_ok=True)
                             logging.debug(f"Created '{str(output_directory)}' directory")
                             annotation_directory = output_directory
@@ -319,6 +326,12 @@ def main():
 
                                 tf.keras.backend.clear_session()
                                 logging.debug(f"Done processing image {image_path}")
+
+                            logging.debug(f"Aggregating measurements")
+                            aggregate_measurements(
+                                nucleus_measurements=str(output_directory.joinpath(f"nucleus_measurements_{datetime}.csv")),
+                                agnor_measurements=str(output_directory.joinpath(f"agnor_measurements_{datetime}.csv")),
+                                remove_measurement_files=False)
 
                             if open_labelme and not multiple_patients:
                                 status.update("Opening labelme, please wait...")

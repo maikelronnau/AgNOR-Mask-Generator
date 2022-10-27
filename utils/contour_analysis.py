@@ -1,3 +1,5 @@
+import logging
+import os
 import time
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -460,7 +462,6 @@ def write_contour_measurements(
     parent_measurements: List[dict],
     child_measurements: List[dict],
     output_path: str,
-    ignore_parent: Optional[bool] = False,
     datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S')) -> None:
     """Writes contour measurements to `.csv` files.
     Args:
@@ -477,20 +478,121 @@ def write_contour_measurements(
     df_parent["datetime"] = datetime
     df_child["datetime"] = datetime
 
-    parent_measurements_output = Path(output_path).joinpath(f"nuclei_measurements_{datetime}.csv")
+    parent_measurements_output = Path(output_path).joinpath(f"nucleus_measurements_{datetime}.csv")
     child_measurements_output = Path(output_path).joinpath(f"agnor_measurements_{datetime}.csv")
 
-    if not ignore_parent:
-        if Path(parent_measurements_output).is_file():
-            df_parent.to_csv(str(parent_measurements_output), mode="a", header=False, index=False)
-        else:
-            df_parent.to_csv(str(parent_measurements_output), mode="w", header=True, index=False)
+    if Path(parent_measurements_output).is_file():
+        df_parent.to_csv(str(parent_measurements_output), mode="a", header=False, index=False)
+    else:
+        df_parent.to_csv(str(parent_measurements_output), mode="w", header=True, index=False)
 
     if Path(child_measurements_output).is_file():
         df_child.to_csv(str(child_measurements_output), mode="a", header=False, index=False)
     else:
         df_child.to_csv(str(child_measurements_output), mode="w", header=True, index=False)
 
+
+def aggregate_measurements(
+    nucleus_measurements: str,
+    agnor_measurements: str,
+    remove_measurement_files: Optional[bool] = False,
+    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S')) -> None:
+    """Reads, aggregates, and saves the nuclei and AgNOR measurements.
+
+    Args:
+        nucleus_measurements (str): Path to the .csv file containing the nuclei measurements.
+        agnor_measurements (str): Path to the .csv file containing the AgNORs measurements.
+        remove_measurement_files (Optional[bool], optional): Whether or not to remove the measurement files used for aggregation. Defaults to False.
+        datetime (Optional[str], optional): A date and time identification for when the file was generated. Defaults to time.strftime('%Y%m%d%H%M%S').
+    """
+    # Patient,NNA1,NNA2,NNA3,NNA4,NNA5+,NNA1%,NNA2%,NNA3%,NNA4%,NNA5+%,Number of Nucleus, Number of AgNORs,Number of Clusters,Number of Satellites,Average Nucleus Size (Pixels),Average AgNOR Size (Pixels),Average Cluster Size (Pixels),Average Satellite (Pixels)
+    df_nucleus = pd.read_csv(nucleus_measurements)
+    df_agnor = pd.read_csv(agnor_measurements)
+
+    number_of_nucleus = len(df_nucleus)
+    number_of_agnors = len(df_agnor)
+    number_of_clusters = len(df_agnor[df_agnor["type"] == "cluster"])
+    number_of_satellites = len(df_agnor[df_agnor["type"] == "satellite"])
+
+    average_nucleus_size = round(df_nucleus["nucleus_pixel_count"].mean(), 2)
+    average_agnor_size = round(df_agnor["agnor_pixel_count"].mean(), 2)
+    average_cluster_size = round(df_agnor[df_agnor["type"] == "cluster"]["agnor_pixel_count"].mean(), 2)
+    average_satellite_size = round(df_agnor[df_agnor["type"] == "satellite"]["agnor_pixel_count"].mean(), 2)
+
+    n_nuclei_with_n_agnors = df_agnor.groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
+    n_nuclei_with_n_agnors = n_nuclei_with_n_agnors.groupby(["agnor"]).size().reset_index(name="count")
+
+    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 1]["count"]) > 0:
+        nna1 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 1]["count"].iloc[0]
+    else:
+        nna1 = 0
+    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 2]["count"]) > 0:
+        nna2 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 2]["count"].iloc[0]
+    else:
+        nna2 = 0
+    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 3]["count"]) > 0:
+        nna3 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 3]["count"].iloc[0]
+    else:
+        nna3 = 0
+    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 4]["count"]) > 0:
+        nna4 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 4]["count"].iloc[0]
+    else:
+        nna4 = 0
+    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] >= 5]["count"]) > 0:
+        nna5_plus = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] >= 5]["count"].sum()
+    else:
+        nna5_plus = 0
+
+    if number_of_nucleus > 0:
+        nna1_percent = round(nna1 / number_of_nucleus, 2)
+        nna2_percent = round(nna2 / number_of_nucleus, 2)
+        nna3_percent = round(nna3 / number_of_nucleus, 2)
+        nna4_percent = round(nna4 / number_of_nucleus, 2)
+        nna5_plus_percent = round(nna5_plus / number_of_nucleus, 2)
+    else:
+        nna1_percent = 0
+        nna2_percent = 0
+        nna3_percent = 0
+        nna4_percent = 0
+        nna5_plus_percent = 0
+
+    record = {
+        "Patient": [df_agnor["patient_id"].iloc[0]],
+        "Number of Nucleus": [number_of_nucleus],
+        "Number of AgNORs": [number_of_agnors],
+        "Number of Clusters": [number_of_clusters],
+        "Number of Satellites": [number_of_satellites],
+        "Average Nucleus Size": [average_nucleus_size],
+        "Average AgNOR Size": [average_agnor_size],
+        "Average Cluster Size": [average_cluster_size],
+        "Average Satellite Size": [average_satellite_size],
+        "NNA1": [nna1],
+        "NNA2": [nna2],
+        "NNA3": [nna3],
+        "NNA4": [nna4],
+        "NNA5+": [nna5_plus],
+        "NNA1%": nna1_percent,
+        "NNA2%": nna2_percent,
+        "NNA3%": nna3_percent,
+        "NNA4%": nna4_percent,
+        "NNA5+%": nna5_plus_percent
+    }
+
+    df = pd.DataFrame.from_dict(record)
+    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime} - {record['Patient'][0]}.csv"))
+    df.to_csv(output_path, mode="w", header=True, index=False)
+
+    if remove_measurement_files:
+        if Path(nucleus_measurements).is_file():
+            try:
+                os.remove(nucleus_measurements)
+            except Exception:
+                logging.debug(f"Could not remove file {nucleus_measurements}")
+        if Path(agnor_measurements).is_file():
+            try:
+                os.remove(agnor_measurements)
+            except Exception:
+                logging.debug(f"Could not remove file {agnor_measurements}")
 
 
 def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarray]:
@@ -545,14 +647,7 @@ def discard_unboxed_contours(
         for i in range(len(bboxes)):
             bboxes[i] = convert_bbox_to_contour(bboxes[i].tolist())
 
-        nuclei_contours_adequate, _ = discard_contours_outside_contours(bboxes, parent_contours)
-        nuclei_contours_adequate_final = []
-        for contour in nuclei_contours_adequate:
-            for bbox in bboxes:
-                iou = get_intersection(bbox, contour, shape=prediction.shape[:2])
-                if iou > 0.:
-                    nuclei_contours_adequate_final.append(contour)
-        parent_contours = nuclei_contours_adequate_final
+        parent_contours, _ = discard_contours_outside_contours(bboxes, parent_contours)
         child_contours, _ = discard_contours_outside_contours(parent_contours, child_contours)
 
         # Create a new mask with the filtered nuclei and NORs
