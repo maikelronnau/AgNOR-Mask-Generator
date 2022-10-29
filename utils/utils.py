@@ -438,7 +438,10 @@ def open_with_labelme(path: str, wait: Optional[int] = 20) -> None:
         wait (int): Time to wait after calling `labelme`.
     """
     logging.debug("Opening labelme")
-    subprocess.Popen([r"labelme.exe", str(path)])
-    logging.debug("Labelme called")
-    logging.debug(f"Waiting {wait} before resuming the program")
-    time.sleep(wait)
+    if Path("labelme.exe").is_file():
+        subprocess.Popen([r"labelme.exe", str(path)])
+        logging.debug("Labelme called")
+        logging.debug(f"Waiting {wait} before resuming the program")
+        time.sleep(wait)
+    else:
+        logging.debug("Labelme file not found")

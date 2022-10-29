@@ -108,6 +108,7 @@ def create_annotation(
             shape=original_image_shape,
             mask_name=source_image_path.name,
             record_id=patient,
+            record_class=patient_group,
             start_index=i)
 
         if classify_agnor:
@@ -268,6 +269,7 @@ def update_annotation(
                 shape=original_image_shape,
                 mask_name=source_image_path.name,
                 record_id=patient,
+                record_class=patient_group,
                 start_index=i)
 
             if classify_agnor:

@@ -12,14 +12,14 @@ import tensorflow as tf
 from scipy.interpolate import splev, splprep
 
 from utils.utils import (color_classes, convert_bbox_to_contour,
-                         get_intersection, get_labelme_points)
+                         get_labelme_points)
 
 
 NUCLEUS_COLUMNS = [
     "patient_id",
     "source_image",
     "flag",
-    "class",
+    "group",
     "nucleus",
     "nucleus_pixel_count",
     "type"]
@@ -28,7 +28,7 @@ AGNOR_COLUMNS = [
     "patient_id",
     "source_image",
     "flag",
-    "class",
+    "group",
     "nucleus",
     "agnor",
     "agnor_pixel_count",
@@ -505,7 +505,7 @@ def aggregate_measurements(
         remove_measurement_files (Optional[bool], optional): Whether or not to remove the measurement files used for aggregation. Defaults to False.
         datetime (Optional[str], optional): A date and time identification for when the file was generated. Defaults to time.strftime('%Y%m%d%H%M%S').
     """
-    # Patient,NNA1,NNA2,NNA3,NNA4,NNA5+,NNA1%,NNA2%,NNA3%,NNA4%,NNA5+%,Number of Nucleus, Number of AgNORs,Number of Clusters,Number of Satellites,Average Nucleus Size (Pixels),Average AgNOR Size (Pixels),Average Cluster Size (Pixels),Average Satellite (Pixels)
+    # Patient,NNA1,NNA2,NNA3,NNA4,NNA5+,NNA1%,NNA2%,NNA3%,NNA4%,NNA5+%,Number of Nucleus, Number of AgNORs,Number of Clusters,Number of Satellites,Mean Nucleus Size (Pixels),Mean AgNOR Size (Pixels),Mean Cluster Size (Pixels),Mean Satellite (Pixels)
     df_nucleus = pd.read_csv(nucleus_measurements)
     df_agnor = pd.read_csv(agnor_measurements)
 
@@ -514,10 +514,14 @@ def aggregate_measurements(
     number_of_clusters = len(df_agnor[df_agnor["type"] == "cluster"])
     number_of_satellites = len(df_agnor[df_agnor["type"] == "satellite"])
 
-    average_nucleus_size = round(df_nucleus["nucleus_pixel_count"].mean(), 2)
-    average_agnor_size = round(df_agnor["agnor_pixel_count"].mean(), 2)
-    average_cluster_size = round(df_agnor[df_agnor["type"] == "cluster"]["agnor_pixel_count"].mean(), 2)
-    average_satellite_size = round(df_agnor[df_agnor["type"] == "satellite"]["agnor_pixel_count"].mean(), 2)
+    agnor_central_measurements = df_agnor[df_agnor["type"] == "cluster"].groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
+    mean_agnor_per_nucleus = round(agnor_central_measurements["agnor"].mean(), 2)
+    median_agnor_per_nucleus = round(agnor_central_measurements["agnor"].median(), 2)
+
+    mean_nucleus_size = round(df_nucleus["nucleus_pixel_count"].mean(), 2)
+    mean_agnor_size = round(df_agnor["agnor_pixel_count"].mean(), 2)
+    mean_cluster_size = round(df_agnor[df_agnor["type"] == "cluster"]["agnor_pixel_count"].mean(), 2)
+    mean_satellite_size = round(df_agnor[df_agnor["type"] == "satellite"]["agnor_pixel_count"].mean(), 2)
 
     n_nuclei_with_n_agnors = df_agnor.groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
     n_nuclei_with_n_agnors = n_nuclei_with_n_agnors.groupby(["agnor"]).size().reset_index(name="count")
@@ -558,28 +562,34 @@ def aggregate_measurements(
 
     record = {
         "Patient": [df_agnor["patient_id"].iloc[0]],
-        "Number of Nucleus": [number_of_nucleus],
+        "Date": "",
+        "Exam instance": "",
+        "Anatomical Site": "",
+        "Group": df_agnor["group"].unique()[0],
+        "Number of Nuclei": [number_of_nucleus],
         "Number of AgNORs": [number_of_agnors],
         "Number of Clusters": [number_of_clusters],
         "Number of Satellites": [number_of_satellites],
-        "Average Nucleus Size": [average_nucleus_size],
-        "Average AgNOR Size": [average_agnor_size],
-        "Average Cluster Size": [average_cluster_size],
-        "Average Satellite Size": [average_satellite_size],
-        "NNA1": [nna1],
-        "NNA2": [nna2],
-        "NNA3": [nna3],
-        "NNA4": [nna4],
-        "NNA5+": [nna5_plus],
-        "NNA1%": nna1_percent,
-        "NNA2%": nna2_percent,
-        "NNA3%": nna3_percent,
-        "NNA4%": nna4_percent,
-        "NNA5+%": nna5_plus_percent
+        "Mean AgNOR per Nucleus": mean_agnor_per_nucleus,
+        "Median AgNOR per Nucleus": median_agnor_per_nucleus,
+        "Mean Nucleus Size": [mean_nucleus_size],
+        "Mean AgNOR Size": [mean_agnor_size],
+        "Mean Cluster Size": [mean_cluster_size],
+        "Mean Satellite Size": [mean_satellite_size],
+        "AgNOR = 1": [nna1],
+        "AgNOR = 2": [nna2],
+        "AgNOR = 3": [nna3],
+        "AgNOR = 4": [nna4],
+        "AgNOR = 5+": [nna5_plus],
+        "AgNOR = 1%": nna1_percent,
+        "AgNOR = 2%": nna2_percent,
+        "AgNOR = 3%": nna3_percent,
+        "AgNOR = 4%": nna4_percent,
+        "AgNOR = 5%+": nna5_plus_percent
     }
 
     df = pd.DataFrame.from_dict(record)
-    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime} - {record['Patient'][0]}.csv"))
+    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime}_measurements_{record['Patient'][0]}.csv"))
     df.to_csv(output_path, mode="w", header=True, index=False)
 
     if remove_measurement_files:

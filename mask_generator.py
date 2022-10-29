@@ -225,7 +225,7 @@ def main():
                         aggregate_measurements(
                             nucleus_measurements=str(Path(output_directory).joinpath(f"nucleus_measurements_{datetime}.csv")),
                             agnor_measurements=str(Path(output_directory).joinpath(f"agnor_measurements_{datetime}.csv")),
-                            remove_measurement_files=False)
+                            remove_measurement_files=True)
 
                         if open_labelme and not multiple_patients:
                             status.update("Opening labelme, please wait...")
@@ -331,7 +331,7 @@ def main():
                             aggregate_measurements(
                                 nucleus_measurements=str(output_directory.joinpath(f"nucleus_measurements_{datetime}.csv")),
                                 agnor_measurements=str(output_directory.joinpath(f"agnor_measurements_{datetime}.csv")),
-                                remove_measurement_files=False)
+                                remove_measurement_files=True)
 
                             if open_labelme and not multiple_patients:
                                 status.update("Opening labelme, please wait...")
