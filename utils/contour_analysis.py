@@ -1,3 +1,4 @@
+import csv
 import logging
 import os
 import time
@@ -590,7 +591,7 @@ def aggregate_measurements(
 
     df = pd.DataFrame.from_dict(record)
     output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime}_measurements_{record['Patient'][0]}.csv"))
-    df.to_csv(output_path, mode="w", header=True, index=False)
+    df.to_csv(output_path, mode="w", header=True, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
 
     if remove_measurement_files:
         if Path(nucleus_measurements).is_file():
