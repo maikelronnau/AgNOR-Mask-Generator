@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import PySimpleGUI as sg
 
@@ -22,7 +22,9 @@ TOOLTIPS = {
     "browse": "Opens a window that allows selecting a directory to process.",
     "advanced": "Show advanced options.",
     "multiple_patients": "Check this box if you selected a directory with multiple patients.",
-    "patient_class": "Group the patient belongs to. Note that if processing multiple patients at once, all of them will assigned the same group."
+    "patient_class": "Group the patient belongs to. Note that if processing multiple patients at once, all of them will assigned the same group.",
+    "anatomical_site": "The area of the mouth where the brushing was done.",
+    "exam_date": "Date the brushing was done."
 }
 
 
@@ -52,25 +54,38 @@ def get_layout() -> List[list]:
     """
     layout = [
         [
-            sg.Text(PROGRAM_TITLE, text_color="white", font=TITLE_FONT),
+            sg.Text(PROGRAM_TITLE, text_color="white", font=TITLE_FONT, pad=((0, 0), (0, 15))),
         ],
         [
-            sg.Text(f"{' ' * 14}Patient\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["patient"]),
-            sg.InputText(size=(70, 1), key="-PATIENT-", tooltip=TOOLTIPS["patient"], pad=((5, 0), (0, 6)))
-        ],
-        [
-            sg.Text(f"{' ' * 4}Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_class"]),
-            sg.In(size=(70, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"]),
+            sg.Text("Patient\t\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["patient"]),
+            sg.InputText(size=(50, 1), key="-PATIENT-", tooltip=TOOLTIPS["patient"]),
+            sg.Push(),
+
+            sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"], pad=((45, 0), (0, 0))),
+            sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"]),
             sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Push(),
         ],
         [
-            sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"]),
-            sg.In(size=(70, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"]),
-            sg.FolderBrowse(tooltip=TOOLTIPS["browse"])
+            sg.Text("Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_class"]),
+            sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"]),
+            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Push(),
+
+            sg.Text("Exam date\t", text_color="white", font=MAIN_FONT, key="-EXAM-DATE-TEXT-", tooltip=TOOLTIPS["exam_date"], pad=((10, 0), (0, 0))),
+            sg.In(size=(50, 1), key="-EXAM-DATE-", tooltip=TOOLTIPS["exam_date"]),
+            sg.CalendarButton("Select date", target="-EXAM-DATE-", format="%Y/%m/%d"),
+            sg.Push(),
         ],
         [
-            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"]),
-            sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"])
+            sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"], pad=((5, 0), (25, 0))),
+            sg.In(size=(129, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"], pad=((10, 0), (25, 0))),
+            sg.FolderBrowse(tooltip=TOOLTIPS["browse"], pad=((10, 0), (25, 0))),
+            sg.Push(),
+        ],
+        [
+            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"], pad=((5, 5), (15, 5))),
+            sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"], pad=((5, 5), (15, 5)))
         ],
         [
             sg.Text("\nAdvanced options ↓", text_color="white", font=MAIN_FONT, enable_events=True, key="-ADVANCED-", tooltip=TOOLTIPS["advanced"],)
@@ -86,7 +101,7 @@ def get_layout() -> List[list]:
             sg.Text("", text_color="white", key="-STATUS-", font=SECONDARY_FONT, pad=((0, 0), (10, 0)))
         ],
         [
-            sg.Cancel("Close", size=(10, 1), pad=((502, 0), (10, 0)), key="-CLOSE-"),
+            sg.Cancel("Close", size=(10, 1), pad=((940, 0), (10, 0)), key="-CLOSE-"),
             sg.Ok(size=(10, 1), pad=((10, 0), (10, 0)), font=MAIN_FONT, key="-OK-")
         ]
     ]

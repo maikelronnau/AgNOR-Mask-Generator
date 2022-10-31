@@ -45,6 +45,8 @@ def create_annotation(
     original_image_shape: Tuple[int, int],
     hashfile: Optional[str] = None,
     classify_agnor: Optional[bool] = False,
+    exam_date: Optional[str] = "",
+    anatomical_site: Optional[str] = "",
     overlay: Optional[bool] = False,
     datetime: Optional[str] = None) -> None:
     """Save a `labelme` annotation from a segmented input image.
@@ -60,6 +62,8 @@ def create_annotation(
         original_image_shape (Tuple[int, int]): Height and width of the input image.
         hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
         classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
+        exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
+        anatomical_site: (Optional[str], optional): The area of the mouth where the brushing was done. Defaults to "".
         overlay (Optional[bool], optional): Whether or not to save the segmentation overlay.
         datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
     """
@@ -80,6 +84,8 @@ def create_annotation(
         "imageWidth": width,
         "patient": patient,
         "group": patient_group,
+        "exam_date": exam_date,
+        "anatomical_site": anatomical_site,
         "imagePath": source_image_path.name,
         "imageHash": hashfile,
         "dateTime": datetime,
@@ -109,6 +115,8 @@ def create_annotation(
             mask_name=source_image_path.name,
             record_id=patient,
             record_class=patient_group,
+            exam_date=exam_date,
+            anatomical_site=anatomical_site,
             start_index=i)
 
         if classify_agnor:
@@ -188,6 +196,8 @@ def update_annotation(
     original_image_shape: Tuple[int, int],
     hashfile: Optional[str] = None,
     classify_agnor: Optional[bool] = False,
+    exam_date: Optional[str] = "",
+    anatomical_site: Optional[str] = "",
     overlay: Optional[bool] = False,
     datetime: Optional[str] = None) -> None:
     """Update an existing annotation file considering bounding boxes.
@@ -203,6 +213,8 @@ def update_annotation(
         original_image_shape (Tuple[int, int]): Height and width of the input image.
         hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
         classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
+        exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
+        anatomical_site: (Optional[str], optional): The area of the mouth where the brushing was done. Defaults to "".
         overlay (Optional[bool], optional): Whether or not to save the segmentation overlay.
         datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
     """
@@ -270,6 +282,8 @@ def update_annotation(
                 mask_name=source_image_path.name,
                 record_id=patient,
                 record_class=patient_group,
+                exam_date=exam_date,
+                anatomical_site=anatomical_site,
                 start_index=i)
 
             if classify_agnor:

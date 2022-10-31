@@ -43,7 +43,7 @@ def main():
     status = window["-STATUS-"]
     update_status = True
 
-    model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+    model = None
 
     # Prepare tensor
     height, width, channels = DEFAULT_MODEL_INPUT_SHAPE
@@ -72,8 +72,10 @@ def main():
             if values["-MULTIPLE-PATIENTS-"]:
                 window["-PATIENT-"].update(disabled=True)
                 window["-PATIENT-"]("")
+                window["-OPEN-LABELME-"].update(disabled=True)
             else:
                 window["-PATIENT-"].update(disabled=False)
+                window["-OPEN-LABELME-"].update(disabled=False)
 
         # Folder name was filled in, make a list of files in the folder
         if event == "-OK-":
@@ -91,10 +93,12 @@ def main():
             patient_group = values["-PATIENT-GROUP-"]
             classify_agnor = values["-CLASSIFY-AGNOR-"]
             bboxes = values["-USE-BOUNDING-BOXES-"]
-            open_labelme = values["-OPEN-LABELME-"]
             overlay = values["-GENERATE-OVERLAY-"]
             multiple_patients = values["-MULTIPLE-PATIENTS-"]
+            open_labelme = values["-OPEN-LABELME-"] if not multiple_patients else False
             base_directory = Path(values["-INPUT-DIRECTORY-"])
+            exam_date = values["-EXAM-DATE-"]
+            anatomical_site = values["-ANATOMICAL-SITE-"]
 
             if base_directory.is_dir():
                 if multiple_patients:
@@ -190,6 +194,9 @@ def main():
 
                             image_tensor[0, :, :, :] = image
 
+                            if model is None:
+                                model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+
                             logging.debug("Predict")
                             prediction = model.predict_on_batch(image_tensor)[0]
 
@@ -206,7 +213,7 @@ def main():
                                 input_image=image_original,
                                 prediction=prediction,
                                 patient=patient,
-                                patient_group=patient_group,
+                                anatomical_site=anatomical_site,
                                 annotation_directory=str(input_directory),
                                 output_directory=str(output_directory),
                                 source_image_path=image_path,
@@ -214,6 +221,8 @@ def main():
                                 original_image_shape=original_shape,
                                 hashfile=hashfile,
                                 classify_agnor=classify_agnor,
+                                patient_group=patient_group,
+                                exam_date=exam_date,
                                 overlay=overlay,
                                 datetime=datetime
                             )
@@ -297,6 +306,9 @@ def main():
 
                                 image_tensor[0, :, :, :] = image
 
+                                if model is None:
+                                    model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+                                
                                 logging.debug("Predict")
                                 prediction = model.predict_on_batch(image_tensor)[0]
 
@@ -313,13 +325,15 @@ def main():
                                     input_image=image_original,
                                     prediction=prediction,
                                     patient=patient,
-                                    patient_group=patient_group,
+                                    anatomical_site=anatomical_site,
                                     annotation_directory=str(annotation_directory),
                                     output_directory=str(output_directory),
                                     source_image_path=image_path,
                                     original_image_shape=original_shape,
                                     hashfile=hashfile,
                                     classify_agnor=classify_agnor,
+                                    patient_group=patient_group,
+                                    exam_date=exam_date,
                                     overlay=overlay,
                                     datetime=datetime
                                 )
