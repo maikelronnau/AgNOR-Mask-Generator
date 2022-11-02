@@ -58,16 +58,6 @@ def main():
         if event == "-CLOSE-":
             logging.debug("Close was pressed")
             break
-        if event == "-ADVANCED-":
-            if advanced:
-                advanced = False
-                window["-ADVANCED-"].update("\nAdvanced options ▼")
-            else:
-                advanced = True
-                window["-ADVANCED-"].update("\nAdvanced options ▲")
-            window["-USE-BOUNDING-BOXES-"].update(visible=advanced)
-            window["-GENERATE-OVERLAY-"].update(visible=advanced)
-            window["-MULTIPLE-PATIENTS-"].update(visible=advanced)
         if event == "-MULTIPLE-PATIENTS-":
             if values["-MULTIPLE-PATIENTS-"]:
                 window["-PATIENT-"].update(disabled=True)
@@ -98,6 +88,7 @@ def main():
             open_labelme = values["-OPEN-LABELME-"] if not multiple_patients else False
             base_directory = Path(values["-INPUT-DIRECTORY-"])
             exam_date = values["-EXAM-DATE-"]
+            exam_instance = values["-EXAM-INSTANCE-"]
             anatomical_site = values["-ANATOMICAL-SITE-"]
 
             if base_directory.is_dir():
@@ -223,6 +214,7 @@ def main():
                                 classify_agnor=classify_agnor,
                                 patient_group=patient_group,
                                 exam_date=exam_date,
+                                exam_instance=exam_instance,
                                 overlay=overlay,
                                 datetime=datetime
                             )
@@ -308,7 +300,7 @@ def main():
 
                                 if model is None:
                                     model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
-                                
+
                                 logging.debug("Predict")
                                 prediction = model.predict_on_batch(image_tensor)[0]
 
@@ -334,6 +326,7 @@ def main():
                                     classify_agnor=classify_agnor,
                                     patient_group=patient_group,
                                     exam_date=exam_date,
+                                    exam_instance=exam_instance,
                                     overlay=overlay,
                                     datetime=datetime
                                 )

@@ -22,6 +22,7 @@ NUCLEUS_COLUMNS = [
     "flag",
     "group",
     "exam_date",
+    "exam_instance",
     "anatomical_site",
     "nucleus",
     "nucleus_pixel_count",
@@ -33,6 +34,7 @@ AGNOR_COLUMNS = [
     "flag",
     "group",
     "exam_date",
+    "exam_instance",
     "anatomical_site",
     "nucleus",
     "agnor",
@@ -410,6 +412,7 @@ def get_contour_measurements(
     record_id: Optional[str] = "unknown",
     record_class: Optional[str] = "unknown",
     exam_date: Optional[str] = "",
+    exam_instance: Optional[str] = "",
     anatomical_site: Optional[str] = "",
     start_index: Optional[int] = 0,
     contours_flag: Optional[str] = "valid") -> Union[List[dict], List[dict], int, int]:
@@ -426,6 +429,7 @@ def get_contour_measurements(
         record_id (Optional[str]): The unique ID of the record. Defaults to "unknown".
         record_class (Optional[str]): The class the record belongs to. Must be one of `["control", "leukoplakia", "carcinoma", "unknown"]`. Defaults to "unknown".
         exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
+        exam_instance (Optional[str], optional): Instance of the exam. For example, `T0`, `T1`, `T2`, etc. Defaults to "".
         anatomical_site: (Optional[str], optional): The area of the mouth where the brushing was done. Defaults to "".
         start_index (Optional[int], optional): The index to start the parent contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
         contours_flag (Optional[str], optional): A string value identifying the characteristic of the record. Usually it will be `valid`, but it can be `discarded` or anything else. Defaults to "valid".
@@ -437,7 +441,7 @@ def get_contour_measurements(
 
     for parent_id, parent_contour in enumerate(parent_contours, start=start_index):
         parent_pixel_count = get_contour_pixel_count(parent_contour, shape)
-        parent_features = [record_id, mask_name, contours_flag, record_class, exam_date, anatomical_site, parent_id, parent_pixel_count, parent_type]
+        parent_features = [record_id, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, parent_pixel_count, parent_type]
         parent_measurements.append({ key: value for key, value in zip(NUCLEUS_COLUMNS, parent_features) })
 
         contours_size = []
@@ -449,7 +453,7 @@ def get_contour_measurements(
                     child_pixel_count = get_contour_pixel_count(child_contour, shape)
                     contours_size.append(child_pixel_count)
                     parent_pixel_count_ratio = child_pixel_count / parent_pixel_count
-                    child_features = [record_id, mask_name, contours_flag, record_class, exam_date, anatomical_site, parent_id, child_id, child_pixel_count, child_type, parent_pixel_count_ratio]
+                    child_features = [record_id, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, child_id, child_pixel_count, child_type, parent_pixel_count_ratio]
                     child_measurements.append({ key: value for key, value in zip(AGNOR_COLUMNS, child_features) })
                     child_id += 1
                     break
@@ -572,6 +576,7 @@ def aggregate_measurements(
     record = {
         "Patient": [df_agnor["patient_id"].iloc[0]],
         "Date": [df_agnor["exam_date"].iloc[0]],
+        "Exam Instance": [df_agnor["exam_instance"].iloc[0]],
         "Anatomical Site": [df_agnor["anatomical_site"].iloc[0]],
         "Group": df_agnor["group"].unique()[0],
         "Number of Nuclei": [number_of_nucleus],
@@ -597,7 +602,7 @@ def aggregate_measurements(
     }
 
     df = pd.DataFrame.from_dict(record)
-    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime}_measurements_{record['Patient'][0]}.csv"))
+    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime} - Aggregate measurements - {record['Patient'][0]}.csv"))
     df.to_csv(output_path, mode="w", header=True, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
 
     if remove_measurement_files:

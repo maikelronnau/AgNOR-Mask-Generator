@@ -1,8 +1,10 @@
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Tuple
 
 import PySimpleGUI as sg
+
+from utils.utils import format_combobox_string
 
 
 PROGRAM_NAME = "AgNOR Slide-Image Examiner"
@@ -11,6 +13,7 @@ TITLE_FONT = ("Arial", "14", "bold")
 MAIN_FONT = ("Arial", "10", "bold")
 SECONDARY_FONT = ("Arial", "10")
 TERTIARY_FONT = ("Arial", "8", "italic")
+CONFIG_FILE = "config.txt"
 
 TOOLTIPS = {
     "patient": "Unique patient identifier. It can be the patient name or an ID/code.",
@@ -20,7 +23,6 @@ TOOLTIPS = {
     "bbox": "Restricts processing to nuclei within bounding boxes.",
     "overlay": "Generates an overlay of the input image and the predicted segmentation.",
     "browse": "Opens a window that allows selecting a directory to process.",
-    "advanced": "Show advanced options.",
     "multiple_patients": "Check this box if you selected a directory with multiple patients.",
     "patient_class": "Group the patient belongs to. Note that if processing multiple patients at once, all of them will assigned the same group.",
     "anatomical_site": "The area of the mouth where the brushing was done.",
@@ -37,6 +39,9 @@ def clear_fields(window: sg.Window):
     """
     window["-PATIENT-"]("")
     window["-PATIENT-GROUP-"]("")
+    window["-ANATOMICAL-SITE-"]("")
+    window["-EXAM-DATE-"]("")
+    window["-EXAM-INSTANCE-"]("")
     window["-INPUT-DIRECTORY-"]("")
     window["-CLASSIFY-AGNOR-"](False)
     window["-OPEN-LABELME-"](False)
@@ -44,7 +49,61 @@ def clear_fields(window: sg.Window):
     window["-GENERATE-OVERLAY-"](False)
     window["-MULTIPLE-PATIENTS-"](False)
     window["-PATIENT-"].update(disabled=False)
-    window["-PATIENT-GROUP-"].update(disabled=False)
+    window["-OPEN-LABELME-"].update(disabled=False)
+
+
+def collapse(layout: List[sg.Element], key: str):
+    """Helper function that creates a Column that can be later made hidden, thus appearing "collapsed".
+
+    Args:
+        layout (_type_): The layout for the section.
+        key (_type_): Key used to make this section visible/invisible.
+
+    Returns:
+        sg.pin: A pinned column that can be placed directly into your layout
+    """
+    return sg.pin(sg.Column(layout, key=key))
+
+
+def get_special_elements() -> Tuple[sg.Element]:
+    """Gets the interface elements according to the configuration file (if available).
+
+    If a valid config file is available, then then the elements returned will be of type `sg.Combo`, otherwise they will be of type `sg.In`.
+
+    Returns:
+        Tuple[sg.Element]: Tuple with the two special interface elements. The first corresponds to the patient groups, and the second to the anatomical sites.
+    """
+    patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"])
+    anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
+
+    if Path(CONFIG_FILE).is_file():
+        with open(CONFIG_FILE, "r") as config_file:
+            configs = config_file.readlines()
+
+        patient_groups = []
+        anatomical_sites = []
+        for line in configs:
+            if ":" in line:
+                if line.upper().startswith("GROUP") or line.upper().startswith("GROUPO"):
+                    group = format_combobox_string(line)
+                    if len(group) > 0:
+                        patient_groups.append(group)
+                    continue
+                if line.upper().startswith("SITE") or line.upper().startswith("SITIO"):
+                    site = format_combobox_string(line)
+                    if len(site) > 0:
+                        anatomical_sites.append(site)
+                    continue
+
+        patient_groups = sorted(list(set(patient_groups)))
+        anatomical_sites = sorted(list(set(anatomical_sites)))
+
+        if len(patient_groups) > 0:
+            patient_group = sg.Combo(patient_groups, size=(48, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"])
+        if len(anatomical_sites) > 0:
+            anatomical_site = sg.Combo(anatomical_sites, size=(48, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
+
+    return patient_group, anatomical_site
 
 
 def get_layout() -> List[list]:
@@ -53,6 +112,8 @@ def get_layout() -> List[list]:
     Returns:
         List[list]: List of layout element.
     """
+    patient_group, anatomical_site = get_special_elements()
+
     layout = [
         [
             sg.Text(PROGRAM_TITLE, text_color="white", font=TITLE_FONT, pad=((0, 0), (0, 15))),
@@ -69,7 +130,7 @@ def get_layout() -> List[list]:
         ],
         [
             sg.Text("Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_class"]),
-            sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"]),
+            patient_group,
             sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
 
@@ -80,7 +141,7 @@ def get_layout() -> List[list]:
         ],
         [
             sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (1, 0))),
-            sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5))),
+            anatomical_site,
             sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
         ],
@@ -91,11 +152,14 @@ def get_layout() -> List[list]:
             sg.Push(),
         ],
         [
-            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"], pad=((5, 5), (15, 5))),
-            sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"], pad=((5, 5), (15, 5)))
+            sg.Text("\n\nAdvanced options", text_color="white", font=MAIN_FONT)
         ],
         [
-            sg.Text("\nAdvanced options ▼", text_color="white", font=MAIN_FONT, enable_events=True, key="-ADVANCED-", tooltip=TOOLTIPS["advanced"],)
+            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"]),
+            sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"]),
+            sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"], visible=True),
+            sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"], visible=True),
+            sg.Checkbox("Multiple patients per directory", default=False, text_color="white", enable_events=True, key="-MULTIPLE-PATIENTS-", font=SECONDARY_FONT, tooltip=TOOLTIPS["multiple_patients"], visible=True),
         ],
         [
             sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"], visible=False),
@@ -108,8 +172,8 @@ def get_layout() -> List[list]:
             sg.Text("", text_color="white", key="-STATUS-", font=SECONDARY_FONT, pad=((0, 0), (10, 0)))
         ],
         [
-            sg.Cancel("Close", size=(10, 1), pad=((940, 0), (10, 0)), key="-CLOSE-"),
-            sg.Ok(size=(10, 1), pad=((10, 0), (10, 0)), font=MAIN_FONT, key="-OK-")
+            sg.Cancel("Close", size=(10, 1), pad=((959, 0), (10, 0)), key="-CLOSE-"),
+            sg.Ok("Start", size=(10, 1), pad=((10, 0), (10, 0)), font=MAIN_FONT, key="-OK-")
         ]
     ]
     return layout

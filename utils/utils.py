@@ -445,3 +445,27 @@ def open_with_labelme(path: str, wait: Optional[int] = 20) -> None:
         time.sleep(wait)
     else:
         logging.debug("Labelme file not found")
+
+
+def format_combobox_string(item: str, capitalization: Optional[str] = "title") -> str:
+    """Format combobox string elements.
+    
+
+    Args:
+        item (str): The string to be formatted.
+        capitalization (Optional[str], optional): How to capitalize the formatted string. Must be one of `title`, `upper`, or `lower`. Defaults to "title".
+
+    Returns:
+        str: The formatted string.
+    """
+    item = item.split(":")[1]
+    item = item.strip()
+    if len(item) <= 3:
+        item = item.upper()
+    elif capitalization == "title":
+        item = item.title()
+    elif capitalization == "upper":
+        item = item.upper()
+    elif capitalization == "lower":
+        item = item.lower()
+    return item

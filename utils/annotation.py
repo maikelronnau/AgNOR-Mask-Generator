@@ -46,6 +46,7 @@ def create_annotation(
     hashfile: Optional[str] = None,
     classify_agnor: Optional[bool] = False,
     exam_date: Optional[str] = "",
+    exam_instance: Optional[str] = "",
     anatomical_site: Optional[str] = "",
     overlay: Optional[bool] = False,
     datetime: Optional[str] = None) -> None:
@@ -63,6 +64,7 @@ def create_annotation(
         hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
         classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
         exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
+        exam_instance (Optional[str], optional): Instance of the exam. For example, `T0`, `T1`, `T2`, etc. Defaults to "".
         anatomical_site: (Optional[str], optional): The area of the mouth where the brushing was done. Defaults to "".
         overlay (Optional[bool], optional): Whether or not to save the segmentation overlay.
         datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
@@ -85,6 +87,7 @@ def create_annotation(
         "patient": patient,
         "group": patient_group,
         "exam_date": exam_date,
+        "exam_instance": exam_instance,
         "anatomical_site": anatomical_site,
         "imagePath": source_image_path.name,
         "imageHash": hashfile,
@@ -116,6 +119,7 @@ def create_annotation(
             record_id=patient,
             record_class=patient_group,
             exam_date=exam_date,
+            exam_instance=exam_instance,
             anatomical_site=anatomical_site,
             start_index=i)
 
@@ -197,6 +201,7 @@ def update_annotation(
     hashfile: Optional[str] = None,
     classify_agnor: Optional[bool] = False,
     exam_date: Optional[str] = "",
+    exam_instance: Optional[str] = "",
     anatomical_site: Optional[str] = "",
     overlay: Optional[bool] = False,
     datetime: Optional[str] = None) -> None:
@@ -214,6 +219,7 @@ def update_annotation(
         hashfile (Optional[str], optional): Hashfile of the input image. Defaults to None.
         classify_agnor (Optional[bool], optional): Whether or not to classify AgNORs into `cluster` and `satellite`. Defaults to False.
         exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
+        exam_instance (Optional[str], optional): Instance of the exam. For example, `T0`, `T1`, `T2`, etc. Defaults to "".
         anatomical_site: (Optional[str], optional): The area of the mouth where the brushing was done. Defaults to "".
         overlay (Optional[bool], optional): Whether or not to save the segmentation overlay.
         datetime (Optional[str], optional): Date and time the annotation was generated. Defaults to None.
@@ -231,6 +237,18 @@ def update_annotation(
         annotation["patient"] = patient
     elif "patient" in annotation.keys():
         patient = annotation["patient"]
+    if exam_date != "":
+        annotation["exam_date"] = exam_date
+    else:
+        exam_date = annotation["exam_date"]
+    if exam_instance != "":
+        annotation["exam_instance"] = exam_instance
+    else:
+        exam_instance = annotation["exam_instance"]
+    if anatomical_site != "":
+        annotation["anatomical_site"] = anatomical_site
+    else:
+        anatomical_site = annotation["anatomical_site"]
     if patient_group != "":
         annotation["group"] = patient_group
     elif "group" in annotation.keys():
@@ -283,6 +301,7 @@ def update_annotation(
                 record_id=patient,
                 record_class=patient_group,
                 exam_date=exam_date,
+                exam_instance=exam_instance,
                 anatomical_site=anatomical_site,
                 start_index=i)
 
