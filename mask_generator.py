@@ -61,10 +61,10 @@ def main():
         if event == "-ADVANCED-":
             if advanced:
                 advanced = False
-                window["-ADVANCED-"].update("\nAdvanced options ↓")
+                window["-ADVANCED-"].update("\nAdvanced options ▼")
             else:
                 advanced = True
-                window["-ADVANCED-"].update("\nAdvanced options ↑")
+                window["-ADVANCED-"].update("\nAdvanced options ▲")
             window["-USE-BOUNDING-BOXES-"].update(visible=advanced)
             window["-GENERATE-OVERLAY-"].update(visible=advanced)
             window["-MULTIPLE-PATIENTS-"].update(visible=advanced)

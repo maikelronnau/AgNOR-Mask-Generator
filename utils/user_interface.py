@@ -24,7 +24,8 @@ TOOLTIPS = {
     "multiple_patients": "Check this box if you selected a directory with multiple patients.",
     "patient_class": "Group the patient belongs to. Note that if processing multiple patients at once, all of them will assigned the same group.",
     "anatomical_site": "The area of the mouth where the brushing was done.",
-    "exam_date": "Date the brushing was done."
+    "exam_date": "Date the brushing was done.",
+    "exam_instance": "The 'time' of the exam. For example, 'T0', 'T1', 'T2', etc."
 }
 
 
@@ -61,9 +62,9 @@ def get_layout() -> List[list]:
             sg.InputText(size=(50, 1), key="-PATIENT-", tooltip=TOOLTIPS["patient"]),
             sg.Push(),
 
-            sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"], pad=((45, 0), (0, 0))),
-            sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"]),
-            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Text("Exam date\t", text_color="white", font=MAIN_FONT, key="-EXAM-DATE-TEXT-", tooltip=TOOLTIPS["exam_date"], pad=((90, 0), (0, 0))),
+            sg.In(size=(50, 1), key="-EXAM-DATE-", tooltip=TOOLTIPS["exam_date"]),
+            sg.CalendarButton("Select date", target="-EXAM-DATE-", format="%Y/%m/%d"),
             sg.Push(),
         ],
         [
@@ -72,15 +73,21 @@ def get_layout() -> List[list]:
             sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
 
-            sg.Text("Exam date\t", text_color="white", font=MAIN_FONT, key="-EXAM-DATE-TEXT-", tooltip=TOOLTIPS["exam_date"], pad=((10, 0), (0, 0))),
-            sg.In(size=(50, 1), key="-EXAM-DATE-", tooltip=TOOLTIPS["exam_date"]),
-            sg.CalendarButton("Select date", target="-EXAM-DATE-", format="%Y/%m/%d"),
+            sg.Text("Exam instance\t", text_color="white", font=MAIN_FONT, key="-EXAM-INSTANCE-TEXT-", tooltip=TOOLTIPS["exam_instance"], pad=((5, 0), (0, 0))),
+            sg.In(size=(50, 1), key="-EXAM-INSTANCE-", tooltip=TOOLTIPS["exam_instance"]),
+            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Push(),
+        ],
+        [
+            sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (1, 0))),
+            sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5))),
+            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
         ],
         [
             sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"], pad=((5, 0), (25, 0))),
-            sg.In(size=(129, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"], pad=((10, 0), (25, 0))),
-            sg.FolderBrowse(tooltip=TOOLTIPS["browse"], pad=((10, 0), (25, 0))),
+            sg.In(size=(132, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"], pad=((10, 0), (25, 0))),
+            sg.FolderBrowse(tooltip=TOOLTIPS["browse"], pad=((15, 0), (25, 0))),
             sg.Push(),
         ],
         [
@@ -88,7 +95,7 @@ def get_layout() -> List[list]:
             sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"], pad=((5, 5), (15, 5)))
         ],
         [
-            sg.Text("\nAdvanced options ↓", text_color="white", font=MAIN_FONT, enable_events=True, key="-ADVANCED-", tooltip=TOOLTIPS["advanced"],)
+            sg.Text("\nAdvanced options ▼", text_color="white", font=MAIN_FONT, enable_events=True, key="-ADVANCED-", tooltip=TOOLTIPS["advanced"],)
         ],
         [
             sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"], visible=False),
