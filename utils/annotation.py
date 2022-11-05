@@ -37,6 +37,7 @@ def get_segmentation_overlay(
 def create_annotation(
     input_image: np.ndarray,
     prediction: np.ndarray,
+    patient_record: str,
     patient: str,
     patient_group: str,
     annotation_directory: str,
@@ -55,6 +56,7 @@ def create_annotation(
     Args:
         input_image (np.ndarray): The input image.
         prediction (np.ndarray): The segmented image.
+        patient_record (str): Record of the patient.
         patient (str): The identification of the patient.
         patient_group (str): The group the patient belongs to.
         annotation_directory (str): Path where to save the annotations.
@@ -84,6 +86,7 @@ def create_annotation(
         "shapes": [],
         "imageHeight": height,
         "imageWidth": width,
+        "patient_record": patient_record,
         "patient": patient,
         "group": patient_group,
         "exam_date": exam_date,
@@ -116,7 +119,8 @@ def create_annotation(
             child_contours=filtered_child_contour,
             shape=original_image_shape,
             mask_name=source_image_path.name,
-            record_id=patient,
+            record_id=patient_record,
+            patient_name=patient,
             record_class=patient_group,
             exam_date=exam_date,
             exam_instance=exam_instance,
@@ -191,6 +195,7 @@ def create_annotation(
 def update_annotation(
     input_image: np.ndarray,
     prediction: np.ndarray,
+    patient_record: str,
     patient: str,
     patient_group: str,
     annotation_directory: str,
@@ -210,6 +215,7 @@ def update_annotation(
     Args:
         input_image (np.ndarray): The input image.
         prediction (np.ndarray): The segmented image.
+        patient_record (str): Record of the patient.
         patient (str): The identification of the patient.
         patient_group (str): The group the patient belongs to.
         annotation_path (str): Path of the annotation file to be updated.
@@ -233,6 +239,10 @@ def update_annotation(
     with open(annotation_path, "r") as annotation_file:
         annotation = json.load(annotation_file)
 
+    if patient_record != "":
+        annotation["patient_record"] = patient_record
+    elif "patient_record" in annotation.keys():
+        patient_record = annotation["patient_record"]
     if patient != "":
         annotation["patient"] = patient
     elif "patient" in annotation.keys():
@@ -298,7 +308,8 @@ def update_annotation(
                 child_contours=filtered_child_contour,
                 shape=original_image_shape,
                 mask_name=source_image_path.name,
-                record_id=patient,
+                record_id=patient_record,
+                patient_name=patient,
                 record_class=patient_group,
                 exam_date=exam_date,
                 exam_instance=exam_instance,

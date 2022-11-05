@@ -17,7 +17,8 @@ from utils.utils import (color_classes, convert_bbox_to_contour,
 
 
 NUCLEUS_COLUMNS = [
-    "patient_id",
+    "patient_record",
+    "patient_name",
     "source_image",
     "flag",
     "group",
@@ -29,7 +30,8 @@ NUCLEUS_COLUMNS = [
     "type"]
 
 AGNOR_COLUMNS = [
-    "patient_id",
+    "patient_record",
+    "patient_name",
     "source_image",
     "flag",
     "group",
@@ -410,6 +412,7 @@ def get_contour_measurements(
     parent_type: Optional[str] = "nucleus",
     child_type: Optional[str] = "cluster",
     record_id: Optional[str] = "unknown",
+    patient_name: Optional[str] = "unknown",
     record_class: Optional[str] = "unknown",
     exam_date: Optional[str] = "",
     exam_instance: Optional[str] = "",
@@ -427,6 +430,7 @@ def get_contour_measurements(
         parent_type (Optional[str], optional): The type of the parent contour. Defaults to "nucleus".
         child_type (Optional[str], optional): The type of the child contour. Usually one of `["cluster", "satellite"]`. Defaults to "cluster".
         record_id (Optional[str]): The unique ID of the record. Defaults to "unknown".
+        patient_name (Optional[str]): THe name of the patient. Defaults to "unknown".
         record_class (Optional[str]): The class the record belongs to. Must be one of `["control", "leukoplakia", "carcinoma", "unknown"]`. Defaults to "unknown".
         exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
         exam_instance (Optional[str], optional): Instance of the exam. For example, `T0`, `T1`, `T2`, etc. Defaults to "".
@@ -441,7 +445,7 @@ def get_contour_measurements(
 
     for parent_id, parent_contour in enumerate(parent_contours, start=start_index):
         parent_pixel_count = get_contour_pixel_count(parent_contour, shape)
-        parent_features = [record_id, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, parent_pixel_count, parent_type]
+        parent_features = [record_id, patient_name, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, parent_pixel_count, parent_type]
         parent_measurements.append({ key: value for key, value in zip(NUCLEUS_COLUMNS, parent_features) })
 
         contours_size = []
@@ -453,7 +457,7 @@ def get_contour_measurements(
                     child_pixel_count = get_contour_pixel_count(child_contour, shape)
                     contours_size.append(child_pixel_count)
                     parent_pixel_count_ratio = child_pixel_count / parent_pixel_count
-                    child_features = [record_id, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, child_id, child_pixel_count, child_type, parent_pixel_count_ratio]
+                    child_features = [record_id, patient_name, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, child_id, child_pixel_count, child_type, parent_pixel_count_ratio]
                     child_measurements.append({ key: value for key, value in zip(AGNOR_COLUMNS, child_features) })
                     child_id += 1
                     break
@@ -574,8 +578,9 @@ def aggregate_measurements(
         nna5_plus_percent = 0
 
     record = {
-        "Patient": [df_agnor["patient_id"].iloc[0]],
-        "Date": [df_agnor["exam_date"].iloc[0]],
+        "Record": [df_agnor["patient_record"].iloc[0]],
+        "Patient Name": [df_agnor["patient_name"].iloc[0]],
+        "ExamDate": [df_agnor["exam_date"].iloc[0]],
         "Exam Instance": [df_agnor["exam_instance"].iloc[0]],
         "Anatomical Site": [df_agnor["anatomical_site"].iloc[0]],
         "Group": df_agnor["group"].unique()[0],
@@ -602,7 +607,7 @@ def aggregate_measurements(
     }
 
     df = pd.DataFrame.from_dict(record)
-    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime} - Aggregate measurements - {record['Patient'][0]}.csv"))
+    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime} - Aggregate measurements - {record['Patient Name'][0]}.csv"))
     df.to_csv(output_path, mode="w", header=True, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
 
     if remove_measurement_files:

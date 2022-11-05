@@ -39,7 +39,6 @@ def main():
     logging.debug(f"Program started at `{datetime}`")
 
     window = user_interface.get_window()
-    advanced = False
     status = window["-STATUS-"]
     update_status = True
 
@@ -73,23 +72,28 @@ def main():
                 logging.debug("OK was pressed without a directory being selected")
                 status.update("Please select a directory to start")
                 continue
-            if values["-PATIENT-"] == "":
+            if values["-PATIENT-"] == "" and values["-PATIENT-RECORD-"] == "":
                 if not (values["-MULTIPLE-PATIENTS-"] or values["-USE-BOUNDING-BOXES-"]):
-                    logging.debug("OK was pressed without patient information")
-                    status.update("Please please insert patient")
+                    logging.debug("OK was pressed without patient and record number")
+                    status.update("Please insert patient or record")
                     continue
 
+            # Get user input from the interface
             patient = values["-PATIENT-"]
+            patient_record = values["-PATIENT-RECORD-"]
             patient_group = values["-PATIENT-GROUP-"]
+
+            anatomical_site = values["-ANATOMICAL-SITE-"]
+            exam_date = values["-EXAM-DATE-"]
+            exam_instance = values["-EXAM-INSTANCE-"]
+
             classify_agnor = values["-CLASSIFY-AGNOR-"]
             bboxes = values["-USE-BOUNDING-BOXES-"]
             overlay = values["-GENERATE-OVERLAY-"]
             multiple_patients = values["-MULTIPLE-PATIENTS-"]
             open_labelme = values["-OPEN-LABELME-"] if not multiple_patients else False
+
             base_directory = Path(values["-INPUT-DIRECTORY-"])
-            exam_date = values["-EXAM-DATE-"]
-            exam_instance = values["-EXAM-INSTANCE-"]
-            anatomical_site = values["-ANATOMICAL-SITE-"]
 
             if base_directory.is_dir():
                 if multiple_patients:
@@ -203,6 +207,7 @@ def main():
                             update_annotation(
                                 input_image=image_original,
                                 prediction=prediction,
+                                patient_record=patient_record,
                                 patient=patient,
                                 anatomical_site=anatomical_site,
                                 annotation_directory=str(input_directory),
@@ -316,6 +321,7 @@ def main():
                                 create_annotation(
                                     input_image=image_original,
                                     prediction=prediction,
+                                    patient_record=patient_record,
                                     patient=patient,
                                     anatomical_site=anatomical_site,
                                     annotation_directory=str(annotation_directory),

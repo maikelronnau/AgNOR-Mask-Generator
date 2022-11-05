@@ -17,17 +17,18 @@ CONFIG_FILE = "config.txt"
 
 TOOLTIPS = {
     "patient": "Unique patient identifier. It can be the patient name or an ID/code.",
-    "image_directory": "A directory containing images to be processed.",
-    "inspect_with_labelme": "After processing, opens Labelme for inspection of the results.",
-    "classify_agnor": "Classify AgNORs in clusters or satellites.",
-    "bbox": "Restricts processing to nuclei within bounding boxes.",
-    "overlay": "Generates an overlay of the input image and the predicted segmentation.",
-    "browse": "Opens a window that allows selecting a directory to process.",
-    "multiple_patients": "Check this box if you selected a directory with multiple patients.",
-    "patient_class": "Group the patient belongs to. Note that if processing multiple patients at once, all of them will assigned the same group.",
+    "patient_record": "The record number of the patient.",
+    "patient_group": "Group the patient belongs to. Note that if processing multiple patients at once, all of them will assigned the same group.",
     "anatomical_site": "The area of the mouth where the brushing was done.",
     "exam_date": "Date the brushing was done.",
-    "exam_instance": "The 'time' of the exam. For example, 'T0', 'T1', 'T2', etc."
+    "exam_instance": "The 'time' of the exam. For example, 'T0', 'T1', 'T2', etc.",
+    "image_directory": "A directory containing images to be processed.",
+    "browse": "Opens a window that allows selecting a directory to process.",
+    "classify_agnor": "Classify AgNORs in clusters or satellites.",
+    "inspect_with_labelme": "After processing, opens Labelme for inspection of the results.",
+    "bbox": "Restricts processing to nuclei within bounding boxes.",
+    "overlay": "Generates an overlay of the input image and the predicted segmentation.",
+    "multiple_patients": "Check this box if you selected a directory with multiple patients.",
 }
 
 
@@ -38,6 +39,7 @@ def clear_fields(window: sg.Window):
         window (sg.Window): The window handler.
     """
     window["-PATIENT-"]("")
+    window["-PATIENT-RECORD-"]("")
     window["-PATIENT-GROUP-"]("")
     window["-ANATOMICAL-SITE-"]("")
     window["-EXAM-DATE-"]("")
@@ -73,7 +75,7 @@ def get_special_elements() -> Tuple[sg.Element]:
     Returns:
         Tuple[sg.Element]: Tuple with the two special interface elements. The first corresponds to the patient groups, and the second to the anatomical sites.
     """
-    patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"])
+    patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
     anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
 
     if Path(CONFIG_FILE).is_file():
@@ -99,9 +101,9 @@ def get_special_elements() -> Tuple[sg.Element]:
         anatomical_sites = sorted(list(set(anatomical_sites)))
 
         if len(patient_groups) > 0:
-            patient_group = sg.Combo(patient_groups, size=(48, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_class"])
+            patient_group = sg.Combo(patient_groups, size=(48, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
         if len(anatomical_sites) > 0:
-            anatomical_site = sg.Combo(anatomical_sites, size=(48, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
+            anatomical_site = sg.Combo(anatomical_sites, size=(48, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"])
 
     return patient_group, anatomical_site
 
@@ -119,36 +121,40 @@ def get_layout() -> List[list]:
             sg.Text(PROGRAM_TITLE, text_color="white", font=TITLE_FONT, pad=((0, 0), (0, 15))),
         ],
         [
-            sg.Text("Patient\t\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["patient"]),
+            sg.Text("Patient name\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["patient"]),
             sg.InputText(size=(50, 1), key="-PATIENT-", tooltip=TOOLTIPS["patient"]),
             sg.Push(),
 
-            sg.Text("Exam date\t", text_color="white", font=MAIN_FONT, key="-EXAM-DATE-TEXT-", tooltip=TOOLTIPS["exam_date"], pad=((90, 0), (0, 0))),
-            sg.In(size=(50, 1), key="-EXAM-DATE-", tooltip=TOOLTIPS["exam_date"]),
-            sg.CalendarButton("Select date", target="-EXAM-DATE-", format="%Y/%m/%d"),
+            sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"]),
+            anatomical_site,
+            # sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
         ],
         [
-            sg.Text("Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_class"]),
-            patient_group,
-            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Text("Patient record\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["patient_record"]),
+            sg.InputText(size=(50, 1), key="-PATIENT-RECORD-", tooltip=TOOLTIPS["patient_record"]),
             sg.Push(),
 
-            sg.Text("Exam instance\t", text_color="white", font=MAIN_FONT, key="-EXAM-INSTANCE-TEXT-", tooltip=TOOLTIPS["exam_instance"], pad=((5, 0), (0, 0))),
-            sg.In(size=(50, 1), key="-EXAM-INSTANCE-", tooltip=TOOLTIPS["exam_instance"]),
-            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Text("Exam date\t", text_color="white", font=MAIN_FONT, key="-EXAM-DATE-TEXT-", tooltip=TOOLTIPS["exam_date"], pad=((91, 5), (5, 5))),
+            sg.In(size=(50, 1), key="-EXAM-DATE-", tooltip=TOOLTIPS["exam_date"]),
+            sg.CalendarButton("Select date", target="-EXAM-DATE-", format="%d/%m/%Y"),
             sg.Push(),
         ],
         [
-            sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (1, 0))),
-            anatomical_site,
-            sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Text("Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_group"]),
+            patient_group,
+            # sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
+            sg.Push(),
+
+            sg.Text("Exam instance\t", text_color="white", font=MAIN_FONT, key="-EXAM-INSTANCE-TEXT-", tooltip=TOOLTIPS["exam_instance"], pad=((6, 5), (5, 5))),
+            sg.In(size=(50, 1), key="-EXAM-INSTANCE-", tooltip=TOOLTIPS["exam_instance"]),
+            # sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
         ],
         [
             sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"], pad=((5, 0), (25, 0))),
-            sg.In(size=(132, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"], pad=((10, 0), (25, 0))),
-            sg.FolderBrowse(tooltip=TOOLTIPS["browse"], pad=((15, 0), (25, 0))),
+            sg.In(size=(133, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"], pad=((9, 0), (25, 0))),
+            sg.FolderBrowse(tooltip=TOOLTIPS["browse"], pad=((10, 0), (25, 0))),
             sg.Push(),
         ],
         [
