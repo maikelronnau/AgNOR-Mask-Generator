@@ -447,7 +447,7 @@ def open_with_labelme(path: str, wait: Optional[int] = 20) -> None:
         logging.debug("Labelme file not found")
 
 
-def format_combobox_string(item: str, capitalization: Optional[str] = "title") -> str:
+def format_combobox_string(item: str, capitalization: Optional[str] = None) -> str:
     """Format combobox string elements.
     
 
@@ -460,12 +460,13 @@ def format_combobox_string(item: str, capitalization: Optional[str] = "title") -
     """
     item = item.split(":")[1]
     item = item.strip()
-    if len(item) <= 3:
-        item = item.upper()
-    elif capitalization == "title":
-        item = item.title()
-    elif capitalization == "upper":
-        item = item.upper()
-    elif capitalization == "lower":
-        item = item.lower()
+    if capitalization is not None:
+        if len(item) <= 3:
+            item = item.upper()
+        elif capitalization == "title":
+            item = item.title()
+        elif capitalization == "upper":
+            item = item.upper()
+        elif capitalization == "lower":
+            item = item.lower()
     return item

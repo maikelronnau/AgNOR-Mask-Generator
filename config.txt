@@ -1,9 +1,9 @@
-group: 1 - Controle
-group: 2 - Exposto
-group: 3 - DPMB (Desordem Potencialmente Maligna de Boca)
-group: 3.1 Leucoplasia
-group: 3.2 Eritroplasia
-group: 4 - CEC (Carcinoma Espinocelular)
+group: Controle
+group: Exposto
+# group: DPMB (Desordem Potencialmente Maligna de Boca)
+group: Leucoplasia
+group: Eritroplasia
+group: CEC (Carcinoma Espinocelular)
 
-site: 1 - Borda da lingua
-site: 2 - Soalho de boca
+site: Borda da lingua
+site: Soalho de boca
