@@ -58,8 +58,8 @@ def collapse(layout: List[sg.Element], key: str):
     """Helper function that creates a Column that can be later made hidden, thus appearing "collapsed".
 
     Args:
-        layout (_type_): The layout for the section.
-        key (_type_): Key used to make this section visible/invisible.
+        layout (List[sg.Element]): The layout for the section.
+        key (str): Key used to make this section visible/invisible.
 
     Returns:
         sg.pin: A pinned column that can be placed directly into your layout
@@ -163,15 +163,8 @@ def get_layout() -> List[list]:
         [
             sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"]),
             sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"]),
-            sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"], visible=True),
-            sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"], visible=True),
-            sg.Checkbox("Multiple patients per directory", default=False, text_color="white", enable_events=True, key="-MULTIPLE-PATIENTS-", font=SECONDARY_FONT, tooltip=TOOLTIPS["multiple_patients"], visible=True),
-        ],
-        [
-            sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"], visible=False),
-            sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"], visible=False)
-        ],
-        [
+            sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"]),
+            sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"]),
             sg.Checkbox("Multiple patients per directory", default=False, text_color="white", enable_events=True, key="-MULTIPLE-PATIENTS-", font=SECONDARY_FONT, tooltip=TOOLTIPS["multiple_patients"], visible=False),
         ],
         [
