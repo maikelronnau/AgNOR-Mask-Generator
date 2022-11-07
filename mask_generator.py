@@ -1,5 +1,6 @@
 import argparse
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -26,6 +27,11 @@ def main():
         help="Enable or disable debug mode.",
         default=False,
         action="store_true")
+    parser.add_argument(
+        "-gpu",
+        "--gpu",
+        help="Set which GPU to use. Pass '-1' to run on CPU.",
+        default="0")
     args = parser.parse_args()
 
     if args.debug:
@@ -35,8 +41,10 @@ def main():
             level=logging.DEBUG,
             format="%(asctime)s %(levelname)s %(message)s")
 
-    datetime = f"{time.strftime('%Y%m%d%H%M%S')}"
-    logging.debug(f"Program started at `{datetime}`")
+    logging.debug(f"Program started at `{time.strftime('%Y%m%d%H%M%S')}`")
+
+    logging.debug(f"Using GPU '{args.gpu}'")
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 
     window = user_interface.get_window()
     status = window["-STATUS-"]
