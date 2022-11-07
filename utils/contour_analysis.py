@@ -479,7 +479,7 @@ def write_contour_measurements(
     parent_measurements: List[dict],
     child_measurements: List[dict],
     output_path: str,
-    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S')) -> None:
+    datetime: Optional[str] = time.strftime('%Y%m%d%H%M')) -> None:
     """Writes contour measurements to `.csv` files.
     Args:
         parent_measurements (List[dict]): The parent contours.
@@ -513,7 +513,7 @@ def aggregate_measurements(
     nucleus_measurements: str,
     agnor_measurements: str,
     remove_measurement_files: Optional[bool] = False,
-    datetime: Optional[str] = time.strftime('%Y%m%d%H%M%S')) -> None:
+    datetime: Optional[str] = time.strftime('%Y%m%d%H%M')) -> bool:
     """Reads, aggregates, and saves the nuclei and AgNOR measurements.
 
     Args:
@@ -521,10 +521,20 @@ def aggregate_measurements(
         agnor_measurements (str): Path to the .csv file containing the AgNORs measurements.
         remove_measurement_files (Optional[bool], optional): Whether or not to remove the measurement files used for aggregation. Defaults to False.
         datetime (Optional[str], optional): A date and time identification for when the file was generated. Defaults to time.strftime('%Y%m%d%H%M%S').
+    Returns:
+        bool: `True` if function succeed otherwise `False`.
     """
     # Patient,NNA1,NNA2,NNA3,NNA4,NNA5+,NNA1%,NNA2%,NNA3%,NNA4%,NNA5+%,Number of Nucleus, Number of AgNORs,Number of Clusters,Number of Satellites,Mean Nucleus Size (Pixels),Mean AgNOR Size (Pixels),Mean Cluster Size (Pixels),Mean Satellite (Pixels)
-    df_nucleus = pd.read_csv(nucleus_measurements)
-    df_agnor = pd.read_csv(agnor_measurements)
+    if Path(nucleus_measurements).is_file():
+        df_nucleus = pd.read_csv(nucleus_measurements)
+    else:
+        logging.debug(f"Base measurement file '{nucleus_measurements}' not found")
+        return False
+    if Path(agnor_measurements).is_file():
+        df_agnor = pd.read_csv(agnor_measurements)
+    else:
+        logging.debug(f"Base measurement file '{nucleus_measurements}' not found")
+        return False
 
     number_of_nucleus = len(df_nucleus)
     number_of_agnors = len(df_agnor)
@@ -621,6 +631,8 @@ def aggregate_measurements(
                 os.remove(agnor_measurements)
             except Exception:
                 logging.debug(f"Could not remove file {agnor_measurements}")
+    
+    return True
 
 
 def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarray]:

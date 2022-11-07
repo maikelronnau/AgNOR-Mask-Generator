@@ -104,7 +104,7 @@ def main():
                 raise FileNotFoundError(f"The directory '{base_directory}' was not found.")
 
             for input_directory in directories:
-                datetime = f"{time.strftime('%Y%m%d%H%M%S')}"
+                datetime = f"{time.strftime('%Y%m%d%H%M')}"
                 # Bboxed annotations -> bboxed annotations
                 if bboxes:
                     if input_directory is not None:
@@ -259,9 +259,9 @@ def main():
 
                             logging.debug("Create output directories")
                             if multiple_patients:
-                                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y%m%d%H%M')} - {input_directory.name}")
+                                output_directory = Path(input_directory).joinpath(f"{datetime} - {input_directory.name}")
                             else:
-                                output_directory = Path(input_directory).joinpath(f"{time.strftime('%Y%m%d%H%M')} - {patient}")
+                                output_directory = Path(input_directory).joinpath(f"{datetime} - {patient}")
                             output_directory.mkdir(exist_ok=True)
                             logging.debug(f"Created '{str(output_directory)}' directory")
                             annotation_directory = output_directory
@@ -341,10 +341,15 @@ def main():
                                 logging.debug(f"Done processing image {image_path}")
 
                             logging.debug(f"Aggregating measurements")
-                            aggregate_measurements(
+                            aggregation_result = aggregate_measurements(
                                 nucleus_measurements=str(output_directory.joinpath(f"nucleus_measurements_{datetime}.csv")),
                                 agnor_measurements=str(output_directory.joinpath(f"agnor_measurements_{datetime}.csv")),
-                                remove_measurement_files=True)
+                                remove_measurement_files=True,
+                                datetime=datetime)
+                            
+                            if not aggregation_result:
+                                open_labelme = False
+                                status.update("Could not generate aggregate measurement file")
 
                             if open_labelme and not multiple_patients:
                                 status.update("Opening labelme, please wait...")
