@@ -4,8 +4,7 @@ from typing import List, Tuple
 
 import PySimpleGUI as sg
 
-from utils.utils import format_combobox_string
-
+from utils.utils import ROOT_PATH, format_combobox_string
 
 PROGRAM_NAME = "AgNOR Slide-Image Examiner"
 PROGRAM_TITLE = "Select images to count nuclei and AgNOR"
@@ -187,7 +186,7 @@ def get_window() -> sg.Window:
     sg.theme("DarkBlue")
     layout = get_layout()
     logging.debug(f"""Create window""")
-    icon_path = "icon.ico"
+    icon_path = Path(ROOT_PATH).joinpath("icon.ico")
     try:
         if Path(icon_path).is_file():
             logging.debug(f"""Load icon""")
