@@ -104,4 +104,3 @@ dependencies:
     - werkzeug==2.2.2
     - wrapt==1.14.1
     - zipp==3.10.0
-prefix: C:\Users\maikel\anaconda3\envs\mskg
