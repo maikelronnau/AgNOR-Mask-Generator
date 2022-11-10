@@ -4,7 +4,6 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import tensorflow as tf
 from skimage.io import imread
-from tqdm import tqdm
 
 from utils.contour_analysis import get_contours
 
@@ -289,53 +288,3 @@ def load_dataset(
         return dataset
     else:
         raise FileNotFoundError(f"The directory `{str(dataset_path)}` does not exist.")
-
-
-def write_dataset(
-    dataset: tf.data.Dataset,
-    batches: Optional[int] = None,
-    output_path: Optional[str] = "dataset_visualization",
-    rgb_masks: Optional[bool] = True,
-    mask_intensity: Optional[int] = 127) -> None:
-    """Write to disk a given `tf.data.Dataset`.
-
-    Args:
-        dataset (tf.data.Dataset): The dataset to be written, in the format `((None, HEIGHT, WIDTH, CHANNELS), (None, HEIGHT, WIDTH, CLASSES))`.
-        batches (Optional[int], optional): The number of batches of the dataset to write.. Defaults to None.
-        output_path (Optional[str], optional): The path where to save the written items of the dataset.. Defaults to "dataset_visualization".
-        rgb_masks (Optional[bool], optional): Whether to write the masks as RGB images.. Defaults to True.
-        mask_intensity (Optional[int], optional): The intensity of the masks. Defaults to 127.
-    """
-    output = Path(output_path)
-    images_path = output.joinpath("images")
-    masks_path = output.joinpath("masks")
-
-    images_path.mkdir(exist_ok=True, parents=True)
-    masks_path.mkdir(exist_ok=True, parents=True)
-
-    if not batches:
-        try:
-            batches = len(dataset)
-        except Exception:
-            batches = 1
-            print("It was not possible to determine the number of batches in the dataset, writing only one.")
-    else:
-        batches = max(0, batches)
-
-    for i, batch in tqdm(enumerate(dataset), total=batches):
-        for j, (image, mask) in enumerate(zip(batch[0], batch[1])):
-
-            image_name = str(images_path.joinpath(f"batch_{i}_image_{j}.png"))
-            mask_name = str(masks_path.joinpath(f"batch_{i}_mask_{j}.png"))
-
-            tf.keras.preprocessing.image.save_img(image_name, image)
-
-            if not rgb_masks:
-                mask = tf.image.rgb_to_grayscale(mask)
-                for new_intensity, intensity in enumerate(np.unique(mask)):
-                    mask = np.where(mask == intensity, new_intensity, mask)
-
-            tf.keras.preprocessing.image.save_img(mask_name, mask * mask_intensity, scale=False)
-
-        if i == batches:
-            break
