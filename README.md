@@ -39,6 +39,8 @@ pyinstaller "AgNOR Slide-Image Examiner.spec"`
 
 The executable will be in the `dist` directory.
 
+**Note**: For the executable to work using GPU, `CUDA` and `CUDNN` must be installed in the OS at build time, and not in Anaconda.
+
 ## Usage
 
 Double click on the executable in `dist/` to open the application. To have execution logs saved to a file, run the executable from a command prompt with the argument `-d`. For example:
