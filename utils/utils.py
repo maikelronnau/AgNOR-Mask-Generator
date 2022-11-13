@@ -15,7 +15,7 @@ import segmentation_models as sm
 import tensorflow as tf
 
 
-MSKG_VERSION = "v14"
+MSKG_VERSION = "v15"
 ROOT_PATH = str(Path(__file__).parent.parent.resolve())
 MODEL_PATH = Path(ROOT_PATH).joinpath("AgNOR_e142_l0.0453_DenseNet-169_Linknet.h5")
 DECISION_TREE_MODEL_PATH = Path(ROOT_PATH).joinpath("agnor_decision_tree_classifier.joblib")
