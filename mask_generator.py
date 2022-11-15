@@ -3,6 +3,7 @@ import logging
 import os
 import time
 from pathlib import Path
+import json
 
 import cv2
 import numpy as np
@@ -236,10 +237,28 @@ def main():
                             logging.debug(f"Done processing image {image_path}")
 
                         logging.debug(f"Aggregating measurements")
-                        aggregate_measurements(
+                        aggregation_result = aggregate_measurements(
                             nucleus_measurements=str(Path(output_directory).joinpath(f"nucleus_measurements_{datetime}.csv")),
                             agnor_measurements=str(Path(output_directory).joinpath(f"agnor_measurements_{datetime}.csv")),
-                            remove_measurement_files=True)
+                            remove_measurement_files=True,
+                            datetime=datetime)
+
+                        if aggregation_result:
+                            if Path(annotations[0]).is_file():
+                                with open(annotations[0], "r") as annotation_file:
+                                    annotation = json.load(annotation_file)
+                                    
+                                    if "patient" in annotation.keys():
+                                        if "dateTime" in annotation.keys():
+                                            filename = f"{annotation['dateTime']} - Aggregate measurements - {annotation['patient']}.csv"
+                                            filename = Path(input_directory).joinpath(filename)
+                                            if filename.is_file():
+                                                os.remove(str(filename))
+                                        elif "last_updated" in annotation.keys():
+                                            filename = f"{annotation['last_updated']} - Aggregate measurements - {annotation['patient']}.csv"
+                                            filename = Path(input_directory).joinpath(filename)
+                                            if filename.is_file():
+                                                os.remove(str(filename))
 
                         if open_labelme and not multiple_patients:
                             status.update("Opening labelme, please wait...")

@@ -360,6 +360,7 @@ def update_annotation(
                 datetime=datetime)
 
     logging.debug("Write annotation file")
+    annotation["last_updated"] = datetime
     with open(annotation_path, "w") as output_file:
         json.dump(annotation, output_file, indent=4)
 
