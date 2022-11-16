@@ -541,7 +541,7 @@ def aggregate_measurements(
     number_of_clusters = len(df_agnor[df_agnor["type"] == "cluster"])
     number_of_satellites = len(df_agnor[df_agnor["type"] == "satellite"])
 
-    agnor_central_measurements = df_agnor[df_agnor["type"] == "cluster"].groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
+    agnor_central_measurements = df_agnor[df_agnor["type"].str.contains("cluster|satellite")].groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
     mean_agnor_per_nucleus = round(agnor_central_measurements["agnor"].mean(), 2)
     median_agnor_per_nucleus = round(agnor_central_measurements["agnor"].median(), 2)
 
