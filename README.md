@@ -25,7 +25,7 @@ From source and `exe`:
 ```console
 git clone https://github.com/maikelroennau/AgNOR-Mask-Generator.git
 cd AgNOR-Mask-Generator
-conda env create -n mskg --file environment_gpu.yml
+conda env create -n mskg --file environment.yml
 conda activate mskg
 ```
 
