@@ -77,6 +77,10 @@ def get_special_elements() -> Tuple[sg.Element]:
     Returns:
         Tuple[sg.Element]: Tuple with the two special interface elements. The first corresponds to the patient groups, and the second to the anatomical sites.
     """
+    patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
+    anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
+    databases = sg.In(size=(133, 1), key="-DATABASE-", tooltip=TOOLTIPS["database"], pad=((9, 0), (25, 0)))
+    
     if Path(CONFIG_FILE).is_file():
         with open(CONFIG_FILE, "r") as config_file:
             configs = config_file.readlines()
@@ -107,16 +111,10 @@ def get_special_elements() -> Tuple[sg.Element]:
 
         if len(patient_groups) > 0:
             patient_group = sg.Combo(patient_groups, size=(48, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
-        else:
-            patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
         if len(anatomical_sites) > 0:
             anatomical_site = sg.Combo(anatomical_sites, size=(48, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"])
-        else:
-            anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
         if len(databases) > 0:
             databases = sg.Combo(databases, size=(131, 1), key="-DATABASE-", default_value=databases[0], tooltip=TOOLTIPS["database"], pad=((9, 0), (25, 0)))
-        else:
-            databases = sg.In(size=(133, 1), key="-DATABASE-", tooltip=TOOLTIPS["database"], pad=((9, 0), (25, 0)))
 
     return patient_group, anatomical_site, databases
 
