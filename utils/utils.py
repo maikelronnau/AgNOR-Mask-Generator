@@ -450,7 +450,6 @@ def open_with_labelme(path: str, wait: Optional[int] = 20) -> None:
 
 def format_combobox_string(item: str, capitalization: Optional[str] = None) -> str:
     """Format combobox string elements.
-    
 
     Args:
         item (str): The string to be formatted.

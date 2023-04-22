@@ -7,3 +7,6 @@ group: CEC (Carcinoma Espinocelular)
 
 site: Borda da lingua
 site: Soalho de boca
+
+database: banco_de_dados.csv
+# database: experimento.csv

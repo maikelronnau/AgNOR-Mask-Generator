@@ -1,9 +1,9 @@
 import argparse
+import json
 import logging
 import os
 import time
 from pathlib import Path
-import json
 
 import cv2
 import numpy as np
@@ -86,6 +86,10 @@ def main():
                     logging.debug("OK was pressed without patient and record number")
                     status.update("Please insert patient or record")
                     continue
+            if values["-DATABASE-"] == "":
+                logging.debug("OK was pressed without a database informed")
+                status.update("Please inform a database to proceed")
+                continue
 
             # Get user input from the interface
             patient = values["-PATIENT-"]
@@ -103,6 +107,7 @@ def main():
             open_labelme = values["-OPEN-LABELME-"] if not multiple_patients else False
 
             base_directory = Path(values["-INPUT-DIRECTORY-"])
+            database = values["-DATABASE-"]
 
             if base_directory.is_dir():
                 if multiple_patients:
@@ -241,13 +246,14 @@ def main():
                             nucleus_measurements=str(Path(output_directory).joinpath(f"nucleus_measurements_{datetime}.csv")),
                             agnor_measurements=str(Path(output_directory).joinpath(f"agnor_measurements_{datetime}.csv")),
                             remove_measurement_files=True,
+                            database=database,
                             datetime=datetime)
 
                         if aggregation_result:
                             if Path(annotations[0]).is_file():
                                 with open(annotations[0], "r") as annotation_file:
                                     annotation = json.load(annotation_file)
-                                    
+
                                     if "patient" in annotation.keys():
                                         if "dateTime" in annotation.keys():
                                             filename = f"{annotation['dateTime']} - Aggregate measurements - {annotation['patient']}.csv"
@@ -372,8 +378,9 @@ def main():
                                 nucleus_measurements=str(output_directory.joinpath(f"nucleus_measurements_{datetime}.csv")),
                                 agnor_measurements=str(output_directory.joinpath(f"agnor_measurements_{datetime}.csv")),
                                 remove_measurement_files=True,
+                                database=database,
                                 datetime=datetime)
-                            
+
                             if not aggregation_result:
                                 open_labelme = False
                                 status.update("Could not generate aggregate measurement file")

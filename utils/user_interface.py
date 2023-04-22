@@ -6,6 +6,7 @@ import PySimpleGUI as sg
 
 from utils.utils import ROOT_PATH, format_combobox_string
 
+
 PROGRAM_NAME = "AgNOR Slide-Image Examiner"
 PROGRAM_TITLE = "Select images to count nuclei and AgNOR"
 TITLE_FONT = ("Arial", "14", "bold")
@@ -28,6 +29,8 @@ TOOLTIPS = {
     "bbox": "Restricts processing to nuclei within bounding boxes.",
     "overlay": "Generates an overlay of the input image and the predicted segmentation.",
     "multiple_patients": "Check this box if you selected a directory with multiple patients.",
+    "database": "File where to store all patient records.",
+    "database_browse": "Opens a window that allows selecting a file to store all patient records.",
 }
 
 
@@ -74,15 +77,13 @@ def get_special_elements() -> Tuple[sg.Element]:
     Returns:
         Tuple[sg.Element]: Tuple with the two special interface elements. The first corresponds to the patient groups, and the second to the anatomical sites.
     """
-    patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
-    anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
-
     if Path(CONFIG_FILE).is_file():
         with open(CONFIG_FILE, "r") as config_file:
             configs = config_file.readlines()
 
         patient_groups = []
         anatomical_sites = []
+        databases = []
         for line in configs:
             if ":" in line:
                 if line.upper().startswith("GROUP") or line.upper().startswith("GROUPO"):
@@ -95,16 +96,29 @@ def get_special_elements() -> Tuple[sg.Element]:
                     if len(site) > 0:
                         anatomical_sites.append(site)
                     continue
+                if line.upper().startswith("DATABASE"):
+                    database = format_combobox_string(line)
+                    if len(database) > 0:
+                        databases.append(database)
+                    continue
 
         patient_groups = sorted(list(set(patient_groups)))
         anatomical_sites = sorted(list(set(anatomical_sites)))
 
         if len(patient_groups) > 0:
             patient_group = sg.Combo(patient_groups, size=(48, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
+        else:
+            patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
         if len(anatomical_sites) > 0:
             anatomical_site = sg.Combo(anatomical_sites, size=(48, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"])
+        else:
+            anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
+        if len(databases) > 0:
+            databases = sg.Combo(databases, size=(131, 1), key="-DATABASE-", default_value=databases[0], tooltip=TOOLTIPS["database"], pad=((9, 0), (25, 0)))
+        else:
+            databases = sg.In(size=(133, 1), key="-DATABASE-", tooltip=TOOLTIPS["database"], pad=((9, 0), (25, 0)))
 
-    return patient_group, anatomical_site
+    return patient_group, anatomical_site, databases
 
 
 def get_layout() -> List[list]:
@@ -113,7 +127,7 @@ def get_layout() -> List[list]:
     Returns:
         List[list]: List of layout element.
     """
-    patient_group, anatomical_site = get_special_elements()
+    patient_group, anatomical_site, database = get_special_elements()
 
     layout = [
         [
@@ -126,7 +140,6 @@ def get_layout() -> List[list]:
 
             sg.Text("Anatomical site\t", text_color="white", font=MAIN_FONT, key="-ANATOMICAL-SITE-TEXT-", tooltip=TOOLTIPS["anatomical_site"]),
             anatomical_site,
-            # sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
         ],
         [
@@ -142,18 +155,22 @@ def get_layout() -> List[list]:
         [
             sg.Text("Patient group\t", text_color="white", font=MAIN_FONT, key="-PATIENT-GROUP-TEXT-", tooltip=TOOLTIPS["patient_group"]),
             patient_group,
-            # sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
 
             sg.Text("Exam instance\t", text_color="white", font=MAIN_FONT, key="-EXAM-INSTANCE-TEXT-", tooltip=TOOLTIPS["exam_instance"], pad=((6, 5), (5, 5))),
             sg.In(size=(50, 1), key="-EXAM-INSTANCE-", tooltip=TOOLTIPS["exam_instance"]),
-            # sg.Text("(optional)", text_color="white", font=TERTIARY_FONT),
             sg.Push(),
         ],
         [
             sg.Text("Image Directory\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["image_directory"], pad=((5, 0), (25, 0))),
             sg.In(size=(133, 1), enable_events=True, key="-INPUT-DIRECTORY-", tooltip=TOOLTIPS["image_directory"], pad=((9, 0), (25, 0))),
             sg.FolderBrowse(tooltip=TOOLTIPS["browse"], pad=((10, 0), (25, 0))),
+            sg.Push(),
+        ],
+        [
+            sg.Text("Database\t", text_color="white", font=MAIN_FONT, tooltip=TOOLTIPS["database"], pad=((5, 0), (25, 0))),
+            database,
+            sg.FolderBrowse(tooltip=TOOLTIPS["database_browse"], pad=((10, 0), (25, 0))),
             sg.Push(),
         ],
         [

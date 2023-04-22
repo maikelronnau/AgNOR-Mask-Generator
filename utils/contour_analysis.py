@@ -513,6 +513,7 @@ def aggregate_measurements(
     nucleus_measurements: str,
     agnor_measurements: str,
     remove_measurement_files: Optional[bool] = False,
+    database: Optional[str] = None,
     datetime: Optional[str] = time.strftime('%Y%m%d%H%M')) -> bool:
     """Reads, aggregates, and saves the nuclei and AgNOR measurements.
 
@@ -520,6 +521,7 @@ def aggregate_measurements(
         nucleus_measurements (str): Path to the .csv file containing the nuclei measurements.
         agnor_measurements (str): Path to the .csv file containing the AgNORs measurements.
         remove_measurement_files (Optional[bool], optional): Whether or not to remove the measurement files used for aggregation. Defaults to False.
+        database (Optional[str], optional): What file to save records to. Defaults to None.
         datetime (Optional[str], optional): A date and time identification for when the file was generated. Defaults to time.strftime('%Y%m%d%H%M%S').
     Returns:
         bool: `True` if function succeed otherwise `False`.
@@ -631,7 +633,15 @@ def aggregate_measurements(
                 os.remove(agnor_measurements)
             except Exception:
                 logging.debug(f"Could not remove file {agnor_measurements}")
-    
+
+    if database is not None and database != "":
+        if not database.endswith(".csv"):
+            database = f"{database}.csv"
+        if Path(database).is_file():
+            df.to_csv(database, mode="a", header=False, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
+        else:
+            df.to_csv(database, mode="w", header=True, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
+
     return True
 
 
