@@ -29,7 +29,7 @@ conda env create -n mskg --file environment.yml
 conda activate mskg
 ```
 
-3. Download the pre-trained models and place them in the root directory of the cloned repository. The models can be downloaded from the [releases page](https://github.com/maikelroennau/AgNOR-Mask-Generator/releases).
+3. Download the pre-trained models and place them in the root directory of the cloned repository. The models can be downloaded from [this link](https://ufrgscpd-my.sharepoint.com/:f:/g/personal/00330519_ufrgs_br/EnzAQbs3_4FHlbxemScpD9IBVKNpGUbXRH0Oqqw7nFkYGA?e=vRbBpS).
 
 4. Compile the standalone executable:
 
