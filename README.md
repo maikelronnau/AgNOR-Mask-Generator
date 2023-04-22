@@ -1,8 +1,6 @@
 # AgNOR Slide-Image Examiner
 
-## Overview
-
-Generates segmentation masks and annotations in the [labelme](https://github.com/maikelronnau/labelme) format for AgNOR images using pre-trained models.
+Examines AgNOR -slide-images and produces counts of nuclei and NORs.
 
 ## Requirements
 
