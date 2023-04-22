@@ -17,7 +17,7 @@ import tensorflow as tf
 
 MSKG_VERSION = "v15"
 ROOT_PATH = str(Path(__file__).parent.parent.resolve())
-MODEL_PATH = Path(ROOT_PATH).joinpath("AgNOR_e142_l0.0453_DenseNet-169_Linknet.h5")
+MODEL_PATH = Path(ROOT_PATH).joinpath("AgNOR_DenseNet-169_LinkNet_1920x2560x3.h5")
 DECISION_TREE_MODEL_PATH = Path(ROOT_PATH).joinpath("agnor_decision_tree_classifier.joblib")
 DEFAULT_MODEL_INPUT_SHAPE = (1920, 2560, 3)
 

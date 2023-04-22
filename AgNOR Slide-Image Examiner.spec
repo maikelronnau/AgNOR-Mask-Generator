@@ -8,7 +8,7 @@ a = Analysis(
     ['mask_generator.py'],
     pathex=[],
     binaries=[],
-    datas=[('icon.ico', '.'), ('AgNOR_e142_l0.0453_DenseNet-169_Linknet.h5', '.'), ('agnor_decision_tree_classifier.joblib', '.')],
+    datas=[('icon.ico', '.'), ('AgNOR_DenseNet-169_LinkNet_1920x2560x3.h5', '.')],
     hiddenimports=['tensorflow'],
     hookspath=[],
     hooksconfig={},

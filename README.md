@@ -1,4 +1,4 @@
-# Mask Generator
+# AgNOR Slide-Image Examiner
 
 ## Overview
 
@@ -25,11 +25,13 @@ From source and `exe`:
 ```console
 git clone https://github.com/maikelroennau/AgNOR-Mask-Generator.git
 cd AgNOR-Mask-Generator
-conda env create -n mskg --file environment.yml
-conda activate mskg
+conda env create -n asim --file environment.yml
+conda activate asim
 ```
 
 3. Download the pre-trained models and place them in the root directory of the cloned repository. The models can be downloaded from [this link](https://ufrgscpd-my.sharepoint.com/:f:/g/personal/00330519_ufrgs_br/EnzAQbs3_4FHlbxemScpD9IBVKNpGUbXRH0Oqqw7nFkYGA?e=vRbBpS).
+
+Make sure the model file you want to use matches the `MODEL_PATH` value in the `utils/utils.py` file.
 
 4. Compile the standalone executable:
 
@@ -56,3 +58,9 @@ To select what GPU to use:
 ```
 
 Use `--gpu -1` to use CPU.
+
+Using a different model other than the embedded model:
+
+```console
+"AgNOR Slide-Image Examiner.exe" --model path/to/model.h5
+```
