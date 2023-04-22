@@ -28,11 +28,19 @@ def main():
         help="Enable or disable debug mode.",
         default=False,
         action="store_true")
+    
+    parser.add_argument(
+        "-m",
+        "--model",
+        help="Path to the model to be used. Will replace the embedded model if specified.",
+        default=None)
+
     parser.add_argument(
         "-gpu",
         "--gpu",
         help="Set which GPU to use. Pass '-1' to run on CPU.",
         default="0")
+    
     args = parser.parse_args()
 
     if args.debug:
@@ -50,6 +58,16 @@ def main():
     window = user_interface.get_window()
     status = window["-STATUS-"]
     update_status = True
+
+    if args.model is not None:
+        if Path(args.model).is_file():
+            logging.debug(f"Will load a custom model file: {args.model}")
+            model_path = args.model
+        else:
+            logging.debug(f"A custom model file was specified by it was not found: {args.model}")
+    else:
+        logging.debug("No custom model file was specified. Will use the default embedded model")
+        model_path = MODEL_PATH
 
     model = None
 
@@ -204,7 +222,7 @@ def main():
                             image_tensor[0, :, :, :] = image
 
                             if model is None:
-                                model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+                                model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
 
                             logging.debug("Predict")
                             prediction = model.predict_on_batch(image_tensor)[0]
@@ -337,7 +355,7 @@ def main():
                                 image_tensor[0, :, :, :] = image
 
                                 if model is None:
-                                    model = load_model(str(MODEL_PATH), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+                                    model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
 
                                 logging.debug("Predict")
                                 prediction = model.predict_on_batch(image_tensor)[0]
