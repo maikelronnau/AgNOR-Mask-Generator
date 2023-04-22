@@ -62,3 +62,13 @@ Using a different model other than the embedded model:
 ```console
 "AgNOR Slide-Image Examiner.exe" --model path/to/model.h5
 ```
+
+## Config file
+
+The program loads some of the menu options from a `config.txt` file. There are tree configuration options:
+
+- `group`: names of groups patients belong to.
+- `site`: site from where cells were collected from patients.
+- `database`: a file where the program will append all generated records.
+
+To add new entries, use the prefixes `group:`, `site:`, or `database:` followed by the information. Only one entire per line is supported. To remove an entry, either delete the line or comment it out by adding a `#` in the beginning of the row.
