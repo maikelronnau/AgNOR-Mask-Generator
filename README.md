@@ -8,9 +8,9 @@ Examines AgNOR slide-images using a convolutional neural network and produces co
 
 You can download built executables (Windows and Linux) from the page (coming soon).
 
-To use GPU acceleration, install:
-- `CUDA 11.2` (optional)
-- `CUDNN 8.1` (optional)
+To use GPU acceleration, install (optional):
+- `CUDA 11.2`
+- `CUDNN 8.1`
 
 [Microsoft Visual C++ Redistributable for Visual Studio 2015, 2017 and 2019](https://learn.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170) is required for running on Windows.
 
