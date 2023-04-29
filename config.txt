@@ -1,12 +1,12 @@
-group: Controle
-group: Exposto
-# group: DPMB (Desordem Potencialmente Maligna de Boca)
-group: Leucoplasia
-group: Eritroplasia
-group: CEC (Carcinoma Espinocelular)
+group: Control
+group: Exposed
+# group: Potentially Malignant Mouth Disorder
+group: Leukoplakia
+group: Erythroplakia
+group: Squamous cell carcinoma
 
-site: Borda da lingua
-site: Soalho de boca
+site: Tongue edge
+site: Mouth floor
 
-database: banco_de_dados.csv
-# database: experimento.csv
+database: database.csv
+# database: experiment.csv

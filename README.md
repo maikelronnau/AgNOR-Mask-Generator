@@ -1,37 +1,42 @@
 # AgNOR Slide-Image Examiner
 
-Examines AgNOR slide-images and produces counts of nuclei and NORs.
+Examines AgNOR slide-images using a convolutional neural network and produces counts of nuclei and NORs in the `.csv` format.
 
-## Requirements
+![User interface of the AgNOR Slide-Image Examiner](program.png)
 
-**CPU**
+## Download
 
-None.
+You can download built executables (Windows and Linux) from the page (coming soon).
 
-**GPU**
+To use GPU acceleration, install:
+- `CUDA 11.2` (optional)
+- `CUDNN 8.1` (optional)
 
-From source and `exe`:
-- `CUDA 11.2`
-- `CUDNN 8.1`
-- [Microsoft Visual C++ Redistributable for Visual Studio 2015, 2017 and 2019](https://learn.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170) (Windows only)
+[Microsoft Visual C++ Redistributable for Visual Studio 2015, 2017 and 2019](https://learn.microsoft.com/en-US/cpp/windows/latest-supported-vc-redist?view=msvc-170) is required for running on Windows.
 
-## Build stand alone executable
+## Run from source or build a standalone executable
 
 1. Install [Anaconda](https://www.anaconda.com/).
 2. Execute the following commands:
 
 ```console
-git clone https://github.com/maikelroennau/AgNOR-Mask-Generator.git
-cd AgNOR-Mask-Generator
-conda env create -n asim --file environment.yml
-conda activate asim
+git clone https://github.com/maikelroennau/agnor-slide-image-examiner.git
+cd agnor-slide-image-examiner
+conda env create -n asie --file environment.yml
+conda activate asie
 ```
 
 3. Download the pre-trained models and place them in the root directory of the cloned repository. The models can be downloaded from [this link](https://ufrgscpd-my.sharepoint.com/:f:/g/personal/00330519_ufrgs_br/EnzAQbs3_4FHlbxemScpD9IBVKNpGUbXRH0Oqqw7nFkYGA?e=vRbBpS).
 
 Make sure the model file you want to use matches the `MODEL_PATH` value in the `utils/utils.py` file.
 
-4. Compile the standalone executable:
+### Run the main script
+
+```console
+python agnor_slide_image_examiner.py
+```
+
+### Compile the standalone executable:
 
 ```console
 pyinstaller "AgNOR Slide-Image Examiner.spec"`
@@ -44,6 +49,8 @@ The executable will be in the `dist` directory.
 ## Usage
 
 Double click on the executable in `dist/` to open the application. To have execution logs saved to a file, run the executable from a command prompt with the argument `-d`. For example:
+
+**Note**: Instructions use the executable for Windows but they also apply for Linux, except that the Linux executable does not have the `.exe` extension.
 
 ```console
 "AgNOR Slide-Image Examiner.exe" -d

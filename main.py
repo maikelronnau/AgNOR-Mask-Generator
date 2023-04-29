@@ -104,10 +104,6 @@ def main():
                     logging.debug("OK was pressed without patient and record number")
                     status.update("Please insert patient or record")
                     continue
-            if values["-DATABASE-"] == "":
-                logging.debug("OK was pressed without a database informed")
-                status.update("Please inform a database to proceed")
-                continue
 
             # Get user input from the interface
             patient = values["-PATIENT-"]
