@@ -9,6 +9,7 @@ Examines AgNOR slide-images using a convolutional neural network and produces co
 You can download built executables (Windows and Linux) from the page (coming soon).
 
 To use GPU acceleration, install (optional):
+
 - `CUDA 11.2`
 - `CUDNN 8.1`
 
@@ -36,7 +37,7 @@ Make sure the model file you want to use matches the `MODEL_PATH` value in the `
 python agnor_slide_image_examiner.py
 ```
 
-### Compile the standalone executable:
+### Compile the standalone executable
 
 ```console
 pyinstaller "AgNOR Slide-Image Examiner.spec"`
@@ -44,31 +45,58 @@ pyinstaller "AgNOR Slide-Image Examiner.spec"`
 
 The executable will be in the `dist` directory.
 
-**Note**: For the executable to work using GPU, `CUDA` and `CUDNN` must be installed in the OS at build time, and not in Anaconda.
+**Note**: For the executable to work using GPU, `CUDA` and `cuDNN` must be installed in the OS at build time, and not in Anaconda.
 
 ## Usage
 
-Double click on the executable in `dist/` to open the application. To have execution logs saved to a file, run the executable from a command prompt with the argument `-d`. For example:
+Double click on the executable in `dist/` to run the application. Other options are available by running the executable or the `main.py` script from the command line:
+
+```console
+"AgNOR Slide-Image Examiner.exe" --help
+# or
+python main.py --help
+
+# Output:
+usage: main.py [-h] [--model MODEL] [--gpu GPU]
+               [--input-directory INPUT_DIRECTORY] [--patient PATIENT]
+               [--patient-record PATIENT_RECORD]
+               [--patient-group PATIENT_GROUP]
+               [--anatomical-site ANATOMICAL_SITE] [--exam-date EXAM_DATE]
+               [--exam-instance EXAM_INSTANCE] [--classify-agnor] [--bboxes]
+               [--overlay] [--database DATABASE] [--console] [--debug]
+
+AgNOR Slide-Image Examiner
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --model MODEL         Path to the model to be used. Will replace the
+                        embedded model if specified.
+  --gpu GPU             Set which GPU to use. Pass '-1' to run on CPU.
+  --input-directory INPUT_DIRECTORY
+                        Input directory.
+  --patient PATIENT     Patient name.
+  --patient-record PATIENT_RECORD
+                        Patient record number.
+  --patient-group PATIENT_GROUP
+                        Patient group.
+  --anatomical-site ANATOMICAL_SITE
+                        Anatomical site.
+  --exam-date EXAM_DATE
+                        Exam date.
+  --exam-instance EXAM_INSTANCE
+                        Exam instance.
+  --classify-agnor      Classify AgNORs.
+  --bboxes              Use bounding boxes to restrict segmentation results.
+  --overlay             Generate overlay of input images and segmentation.
+  --database DATABASE   Database file. A `.csv` to write the aggregate
+                        measurements to.
+  --console             Enable or disable console mode. If enabled, no GUI
+                        will be displayed.
+  --debug               Enable or disable debug mode to log execution to a
+                        file.
+```
 
 **Note**: Instructions use the executable for Windows but they also apply for Linux, except that the Linux executable does not have the `.exe` extension.
-
-```console
-"AgNOR Slide-Image Examiner.exe" -d
-```
-
-To select what GPU to use:
-
-```console
-"AgNOR Slide-Image Examiner.exe" --gpu 0
-```
-
-Use `--gpu -1` to use CPU.
-
-Using a different model other than the embedded model:
-
-```console
-"AgNOR Slide-Image Examiner.exe" --model path/to/model.h5
-```
 
 ## Config file
 

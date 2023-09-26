@@ -359,7 +359,7 @@ def analyze_contours(
 
     if smooth:
         nuclei_contours = smooth_contours(nuclei_contours, points=40)
-        nors_contours = smooth_contours(nors_contours, 16)
+        # nors_contours = smooth_contours(nors_contours, 16)
 
     nuclei_with_nors, nuclei_without_nors = discard_contours_without_contours(nuclei_contours, nors_contours)
     nuclei_contours_adequate, nuclei_overlapping_deformed = discard_overlapping_deformed_contours(

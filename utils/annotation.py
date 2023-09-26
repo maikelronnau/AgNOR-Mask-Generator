@@ -249,15 +249,15 @@ def update_annotation(
         patient = annotation["patient"]
     if exam_date != "":
         annotation["exam_date"] = exam_date
-    else:
+    elif "exam_date" in annotation.keys():
         exam_date = annotation["exam_date"]
     if exam_instance != "":
         annotation["exam_instance"] = exam_instance
-    else:
+    elif "exam_instance" in annotation.keys():
         exam_instance = annotation["exam_instance"]
     if anatomical_site != "":
         annotation["anatomical_site"] = anatomical_site
-    else:
+    elif "anatomical_site" in annotation.keys():
         anatomical_site = annotation["anatomical_site"]
     if patient_group != "":
         annotation["group"] = patient_group
@@ -294,6 +294,7 @@ def update_annotation(
     # Prevent duplicate annotations by keeping a list of unseen objects
     unseen_contours = parent_contours
     for rectangle in bounding_boxes_shapes:
+        rectangle["label"] = f"BoundingBox {i+1}"
         annotation["shapes"].append(rectangle)
 
         # Convert rectangle points so it can be used in OpenCV to filter other contours
@@ -358,6 +359,7 @@ def update_annotation(
                 child_measurements=child_measurements,
                 output_path=output_directory,
                 datetime=datetime)
+            i += 1
 
     logging.debug("Write annotation file")
     annotation["last_updated"] = datetime
