@@ -76,8 +76,29 @@ def main():
         required=False)
 
     parser.add_argument(
-        "--classify-agnor",
-        help="Classify AgNORs.",
+        "--use-bias",
+        help="Use bias correction.",
+        default=False,
+        action="store_true",
+        required=False)
+
+    parser.add_argument(
+        "--use-bias-layer",
+        help="Use bias correction layer.",
+        default=False,
+        action="store_true",
+        required=False)
+
+    parser.add_argument(
+        "--reclassify",
+        help="Semantically reclassify segmentation.",
+        default=False,
+        action="store_true",
+        required=False)
+
+    parser.add_argument(
+        "--remove-artifacts",
+        help="Remove artifacts from segmentation.",
         default=False,
         action="store_true",
         required=False)
@@ -116,6 +137,10 @@ def main():
         action="store_true")
 
     args = parser.parse_args()
+
+    if args.use_bias_layer and args.use_bias:
+        logging.warning("Both bias layer and bias were specified. ")
+        raise ValueError("Cannot use both bias and bias layer.")
 
     if args.debug:
         logging.basicConfig(
@@ -194,7 +219,11 @@ def main():
                 exam_date = values["-EXAM-DATE-"]
                 exam_instance = values["-EXAM-INSTANCE-"]
 
-                classify_agnor = values["-CLASSIFY-AGNOR-"]
+                use_bias = values["-USE-BIAS-"]
+                use_bias_layer = values["-USE-BIAS-LAYER-"]
+                reclassify = values["-RECLASSIFY-"]
+                remove_artifacts = values["-REMOVE-ARTIFACTS-"]
+
                 bboxes = values["-USE-BOUNDING-BOXES-"]
                 overlay = values["-GENERATE-OVERLAY-"]
                 multiple_patients = values["-MULTIPLE-PATIENTS-"]
@@ -210,7 +239,10 @@ def main():
                 anatomical_site = args.anatomical_site
                 exam_date = args.exam_date
                 exam_instance = args.exam_instance
-                classify_agnor = args.classify_agnor
+                use_bias = args.use_bias
+                use_bias_layer = args.use_bias_layer
+                reclassify = args.reclassify
+                remove_artifacts = args.remove_artifacts
                 bboxes = args.bboxes
                 overlay = args.overlay
                 multiple_patients = False
@@ -319,10 +351,10 @@ def main():
                             image_tensor[0, :, :, :] = image
 
                             if model is None:
-                                model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+                                model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE, use_bias_layer=use_bias_layer)
 
                             logging.debug("Predict")
-                            prediction = model.predict_on_batch(image_tensor)[0]
+                            prediction = model(image_tensor, training=False)[0].numpy()
 
                             if original_shape[0] != height:
                                 prediction = prediction[:original_shape[0], :, :]
@@ -345,7 +377,9 @@ def main():
                                 annotation_path=annotation_path,
                                 original_image_shape=original_shape,
                                 hashfile=hashfile,
-                                classify_agnor=classify_agnor,
+                                use_bias=use_bias,
+                                reclassify=reclassify,
+                                remove_artifacts=remove_artifacts,
                                 patient_group=patient_group,
                                 exam_date=exam_date,
                                 exam_instance=exam_instance,
@@ -456,20 +490,23 @@ def main():
                                 if image.shape[1] != width:
                                     image = pad_along_axis(image, size=width, axis=1)
 
+                                if image.shape[0] != height or image.shape[1] != width:
+                                    logging.debug(f"Image shape {image.shape} does not match model input shape {DEFAULT_MODEL_INPUT_SHAPE}")
+                                    logging.debug(f"Image will be resized to {DEFAULT_MODEL_INPUT_SHAPE}")
+                                    image = cv2.resize(image, DEFAULT_MODEL_INPUT_SHAPE[:2][::-1], interpolation=cv2.INTER_NEAREST)
+
                                 image_tensor[0, :, :, :] = image
 
                                 if model is None:
-                                    model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE)
+                                    model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE, use_bias_layer=use_bias_layer)
 
                                 logging.debug("Predict")
-                                prediction = model.predict_on_batch(image_tensor)[0]
+                                prediction = model(image_tensor, training=False)[0].numpy()
 
                                 if original_shape[0] != height:
                                     prediction = prediction[:original_shape[0], :, :]
                                 if original_shape[1] != width:
                                     prediction = prediction[:, :original_shape[1], :]
-
-                                prediction = collapse_probabilities(prediction, pixel_intensity=127)
 
                                 hashfile = get_hash_file(image_path)
 
@@ -484,7 +521,9 @@ def main():
                                     source_image_path=image_path,
                                     original_image_shape=original_shape,
                                     hashfile=hashfile,
-                                    classify_agnor=classify_agnor,
+                                    use_bias=use_bias,
+                                    reclassify=reclassify,
+                                    remove_artifacts=remove_artifacts,
                                     patient_group=patient_group,
                                     exam_date=exam_date,
                                     exam_instance=exam_instance,
@@ -504,9 +543,10 @@ def main():
                                 datetime=datetime)
                             logging.debug(f"Measurements aggregation complete")
 
-                            if not aggregation_result:
-                                open_labelme = False
-                                status.update("Could not generate aggregate measurement file")
+                            if not console_mode:
+                                if not aggregation_result:
+                                    open_labelme = False
+                                    status.update("Could not generate aggregate measurement file")
 
                             if open_labelme and not multiple_patients:
                                 status.update("Opening labelme, please wait...")

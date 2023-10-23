@@ -13,7 +13,7 @@ import tensorflow as tf
 from scipy.interpolate import splev, splprep
 
 from utils.utils import (color_classes, convert_bbox_to_contour,
-                         get_labelme_points)
+                         get_labelme_points, reset_class_values)
 
 
 NUCLEUS_COLUMNS = [
@@ -51,6 +51,31 @@ CLASSES = [
     "leukoplakia",
     "carcinoma",
     "unknown"]
+
+CLUSTER_CYTOPLAM_ANUCLEATE_COLUMNS = [
+    "patient_record",
+    "patient_name",
+    "source_image",
+    "group",
+    "exam_date",
+    "exam_instance",
+    "anatomical_site",
+    "cluster",
+    "cluster_pixel_count",
+    "type"]
+
+NUCLEI_COLUMNS = [
+    "patient_record",
+    "patient_name",
+    "source_image",
+    "group",
+    "exam_date",
+    "exam_instance",
+    "anatomical_site",
+    "cluster_cytoplasm_anucleate",
+    "nucleus",
+    "nucleus_pixel_count",
+    "type"]
 
 MAX_NUCLEUS_PIXEL_COUNT = 67000
 MIN_NUCLEUS_PERCENT_PIXEL_COUNT = 0.02 # 1196
@@ -409,17 +434,18 @@ def get_contour_measurements(
     child_contours: List[np.ndarray],
     shape: Tuple[int, int],
     mask_name: str,
-    parent_type: Optional[str] = "nucleus",
-    child_type: Optional[str] = "cluster",
+    parent_type: str,
+    child_type: str,
     record_id: Optional[str] = "unknown",
     patient_name: Optional[str] = "unknown",
     record_class: Optional[str] = "unknown",
     exam_date: Optional[str] = "",
     exam_instance: Optional[str] = "",
     anatomical_site: Optional[str] = "",
-    start_index: Optional[int] = 0,
-    contours_flag: Optional[str] = "valid") -> Union[List[dict], List[dict], int, int]:
+    start_index_parent: Optional[int] = 0,
+    start_index_child: Optional[int] = 0) -> Union[List[dict], List[dict], int, int]:
     """Calculate the number of pixels per contour and create a record for each of them.
+
     Args:
         parent_contours (List[np.ndarray]): The parent contours.
         child_contours (List[np.ndarray]): The child contours.
@@ -435,78 +461,58 @@ def get_contour_measurements(
         exam_date (Optional[str], optional): The date the exam (brushing) ocurred. Defaults to "".
         exam_instance (Optional[str], optional): Instance of the exam. For example, `T0`, `T1`, `T2`, etc. Defaults to "".
         anatomical_site: (Optional[str], optional): The area of the mouth where the brushing was done. Defaults to "".
-        start_index (Optional[int], optional): The index to start the parent contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
-        contours_flag (Optional[str], optional): A string value identifying the characteristic of the record. Usually it will be `valid`, but it can be `discarded` or anything else. Defaults to "valid".
+        start_index_parent (Optional[int], optional): The index to start the parent contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
+        start_index_child (Optional[int], optional): The index to start the child contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
     Returns:
         Union[List[dict], List[dict], int, int]: The parent and child contours, and the pixel count of the smallest and biggest AgNOR.
     """
     parent_measurements = []
     child_measurements = []
 
-    for parent_id, parent_contour in enumerate(parent_contours, start=start_index):
+    for parent_id, parent_contour in enumerate(parent_contours, start=start_index_parent):
         parent_pixel_count = get_contour_pixel_count(parent_contour, shape)
-        parent_features = [record_id, patient_name, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, parent_pixel_count, parent_type]
-        parent_measurements.append({ key: value for key, value in zip(NUCLEUS_COLUMNS, parent_features) })
+        parent_features = [record_id, patient_name, mask_name, record_class, exam_date, exam_instance, anatomical_site, parent_id, parent_pixel_count, parent_type]
+        parent_measurements.append({ key: value for key, value in zip(CLUSTER_CYTOPLAM_ANUCLEATE_COLUMNS, parent_features) })
 
-        contours_size = []
 
-        child_id = 0
-        for child_contour in child_contours:
+        for child_id, child_contour in enumerate(child_contours, start=start_index_child):
+            # child_contour = child_contour.reshape((child_contour.shape[0], 1, child_contour.shape[1]))
             for child_point in child_contour:
                 if cv2.pointPolygonTest(parent_contour, tuple(child_point[0]), False) >= 0:
                     child_pixel_count = get_contour_pixel_count(child_contour, shape)
-                    contours_size.append(child_pixel_count)
-                    parent_pixel_count_ratio = child_pixel_count / parent_pixel_count
-                    child_features = [record_id, patient_name, mask_name, contours_flag, record_class, exam_date, exam_instance, anatomical_site, parent_id, child_id, child_pixel_count, child_type, parent_pixel_count_ratio]
-                    child_measurements.append({ key: value for key, value in zip(AGNOR_COLUMNS, child_features) })
+                    child_features = [record_id, patient_name, mask_name, record_class, exam_date, exam_instance, anatomical_site, parent_id, child_id, child_pixel_count, child_type]
+                    child_measurements.append({ key: value for key, value in zip(NUCLEI_COLUMNS, child_features) })
                     child_id += 1
                     break
-
-    if len(contours_size) > 0:
-        min_contour_size = np.min(contours_size)
-        max_contour_size = np.max(contours_size)
-
-        for i, record in enumerate(child_measurements):
-            features = list(record.values())
-            features.append(record["agnor_pixel_count"] / max_contour_size)
-            features.append(record["agnor_pixel_count"] / min_contour_size)
-            child_measurements[i] = {key: value for key, value in zip(AGNOR_COLUMNS, features)}
 
     return parent_measurements, child_measurements
 
 
 def write_contour_measurements(
-    parent_measurements: List[dict],
-    child_measurements: List[dict],
+    measurements: List[dict],
+    filename: str,
     output_path: str,
+    columns: List[str],
     datetime: Optional[str] = time.strftime('%Y%m%d%H%M')) -> None:
     """Writes contour measurements to `.csv` files.
+
     Args:
-        parent_measurements (List[dict]): The parent contours.
-        child_measurements (List[dict]): The child contours.
+        measurements (List[dict]): The parent contours.
+        filename (str): The name of the file to be written.
         output_path (str): The path where the files should be written to.
+        columns (List[str]): The columns to be written to the file.
         datetime (Optional[str], optional): A date and time identification for when the files were generated. Defaults to time.strftime('%Y%m%d%H%M%S').
     """
-    df_parent = pd.DataFrame(parent_measurements, columns=NUCLEUS_COLUMNS)
-    df_child = pd.DataFrame(child_measurements, columns=AGNOR_COLUMNS)
+    df = pd.DataFrame(measurements, columns=columns)
 
-    df_child["nucleus"] = df_parent["nucleus"].unique()[0]
+    df["datetime"] = datetime
 
-    df_parent["datetime"] = datetime
-    df_child["datetime"] = datetime
+    measurements_output = Path(output_path).joinpath(f"{filename}_{datetime}.csv")
 
-    parent_measurements_output = Path(output_path).joinpath(f"nucleus_measurements_{datetime}.csv")
-    child_measurements_output = Path(output_path).joinpath(f"agnor_measurements_{datetime}.csv")
-
-    if Path(parent_measurements_output).is_file():
-        df_parent.to_csv(str(parent_measurements_output), mode="a", header=False, index=False)
+    if Path(measurements_output).is_file():
+        df.to_csv(str(measurements_output), mode="a", header=False, index=False)
     else:
-        df_parent.to_csv(str(parent_measurements_output), mode="w", header=True, index=False)
-
-    if Path(child_measurements_output).is_file():
-        df_child.to_csv(str(child_measurements_output), mode="a", header=False, index=False)
-    else:
-        df_child.to_csv(str(child_measurements_output), mode="w", header=True, index=False)
+        df.to_csv(str(measurements_output), mode="w", header=True, index=False)
 
 
 def aggregate_measurements(
@@ -714,3 +720,184 @@ def discard_unboxed_contours(
         prediction = np.stack([background, nucleus, nor], axis=2).astype(np.uint8)
 
     return prediction, parent_contours, child_contours
+
+
+def adjust_probability(prediction: np.ndarray) -> np.ndarray:
+    """Adjust the probabilities of the classes in the segmentation mask.
+
+    Args:
+        prediction (np.ndarray): The segmentation mask to be adjusted.
+
+    Returns:
+        np.ndarray: The adjusted segmentation mask.
+    """
+    cluster = prediction[:, :, 1].copy() * 127
+    cluster = cluster.astype(np.uint8)
+
+    cytoplasm = prediction[:, :, 2].copy() * 127
+    cytoplasm = cytoplasm.astype(np.uint8)
+
+    cluster_contours, _ = cv2.findContours(cluster, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cluster_mask = np.zeros(prediction.shape[:2], dtype=np.uint8)
+    cv2.drawContours(cluster_mask, contours=cluster_contours, contourIdx=-1, color=1, thickness=cv2.FILLED)
+
+    cytoplasm_contours, _ = cv2.findContours(cytoplasm, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cytoplasm_mask = np.zeros(prediction.shape[:2], dtype=np.uint8)
+    cv2.drawContours(cytoplasm_mask, contours=cytoplasm_contours, contourIdx=-1, color=1, thickness=cv2.FILLED)
+
+    prediction[:, :, 0] = np.where(cluster_mask, 0, prediction[:, :, 0])
+    prediction[:, :, 0] = np.where(cytoplasm_mask, 0, prediction[:, :, 0])
+
+    # Increase the probabilities of classes 5 through 6
+    prediction[:, :, 5:6] += 0.001
+
+    return prediction
+
+
+def remove_segmentation_artifacts(prediction: np.ndarray) -> np.ndarray:
+    """Remove segmentation artifacts from the segmentation mask.
+
+    Args:
+        prediction (np.ndarray): The segmentation mask to be adjusted.
+
+    Returns:
+        np.ndarray: The adjusted segmentation mask.
+    """
+    for i in range(prediction.shape[-1]):
+        class_mask = prediction[:, :, i].copy()
+        class_mask = class_mask.astype(np.uint8)
+
+        contours, _ = cv2.findContours(class_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if len(contours) > 0:
+            if i < 4:
+                kept_contours, converted_to_background = contours, []
+            else:
+                kept_contours, converted_to_background = discard_overlapping_deformed_contours(contours, shape=prediction.shape[:2])
+
+                if len(converted_to_background) > 0:
+                    # Check which contours can be kept by analyzing if their convex hull approximates an ellipse or a circle.
+                    confirmed_discarded = []
+                    for contour in converted_to_background:
+                        contour_convex = cv2.convexHull(contour)
+                        contour_convex_area = cv2.contourArea(contour_convex)
+                        contour_area = cv2.contourArea(contour)
+                        if contour_convex_area > 0:
+                            convexity = contour_area / contour_convex_area
+                            if convexity > 0.7:
+                                kept_contours.append(contour)
+                            else:
+                                confirmed_discarded.append(contour)
+                    converted_to_background = confirmed_discarded
+
+            if len(kept_contours) > 0:
+                # Check which contours have less than 100 pixels and which are 2x bigger than the median.
+                contours_pixel_count = [get_contour_pixel_count(contour, prediction.shape[:2]) for contour in kept_contours]
+
+                confirmed_kept = []
+                for j, contour in enumerate(kept_contours):
+                    if contours_pixel_count[j] < 200:
+                        converted_to_background.append(contour)
+                    else:
+                        confirmed_kept.append(contour)
+                kept_contours = confirmed_kept
+
+            updated_mask = np.zeros(prediction.shape[:2], dtype=np.uint8)
+            cv2.drawContours(updated_mask, contours=kept_contours, contourIdx=-1, color=127, thickness=cv2.FILLED)
+            prediction[:, :, i] = updated_mask
+
+            updated_background = np.zeros(prediction.shape[:2], dtype=np.uint8)
+            cv2.drawContours(updated_background, contours=converted_to_background, contourIdx=-1, color=127, thickness=cv2.FILLED)
+            prediction[:, :, 0] += updated_background
+
+            for j in range(1, prediction.shape[-1]):
+                if j != i:
+                    prediction[:, :, j] = np.where(updated_background, 0, prediction[:, :, j])
+
+    # Apply close morphological operation to the cluster and cytoplasm classes
+    prediction[:, :, 1] = cv2.morphologyEx(prediction[:, :, 1], cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+    prediction[:, :, 2] = cv2.morphologyEx(prediction[:, :, 2], cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
+
+    return prediction
+
+
+def reclassify_segmentation_objects(prediction: np.ndarray) -> np.ndarray:
+    """Reclassify the objects in the segmentation mask according to the Papanicolaou classification.
+
+    Args:
+        prediction (np.ndarray): The segmentation mask to be reclassified.
+
+    Returns:
+        np.ndarray: The reclassified segmentation mask.
+    """
+    # Merge classes
+    nuclei = np.sum(prediction[:, :, 4:], axis=-1).astype(np.uint8)
+    cluster_cytoplasm = prediction[:, :, 1] + prediction[:, :, 2] + prediction[:, :, 3] + nuclei
+
+    # Extract contours
+    cluster_cytoplasm_contours, _ = cv2.findContours(cluster_cytoplasm, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    nuclei_contours, _ = cv2.findContours(nuclei, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Create masks to receive the reclassified objects
+    clusters_mask = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+    nuclei_mask = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+    anucleate_mask = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+
+    # Reclassify clusters, cytoplasm and anucleate considering the number of nuclei inside the object
+    for contour in cluster_cytoplasm_contours:
+        nuclei_count = len(discard_contours_outside_contours(parent_contours=[contour], child_contours=nuclei_contours)[0])
+
+        if nuclei_count == 0:
+            # Anucleate
+            cv2.drawContours(anucleate_mask, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+        elif nuclei_count == 1:
+            # Cytoplasm
+            cv2.drawContours(nuclei_mask, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+        elif nuclei_count > 1:
+            # Cluster
+            cv2.drawContours(clusters_mask, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+
+    # Replace the original classes with the reclassified ones
+    prediction[:, :, 1] = clusters_mask
+    prediction[:, :, 2] = nuclei_mask
+    prediction[:, :, 3] = anucleate_mask
+
+    # Reset class values
+    prediction_reset = reset_class_values(prediction.copy())
+
+    # Create masks to receive the reclassified objects
+    superficial = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+    intermediate = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+    suspected = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+    binucleation = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+
+    for contour in nuclei_contours:
+        nucleus_mask = np.zeros(cluster_cytoplasm.shape[:2], dtype=np.uint8)
+
+        cv2.drawContours(nucleus_mask, contours=[contour], contourIdx=-1, color=1, thickness=cv2.FILLED)
+
+        nuclei_pixels = nucleus_mask * prediction_reset
+        nucleus_class, counts = np.unique(nuclei_pixels, return_counts=True)
+
+        prevalent_class = nucleus_class[np.argmax(counts[1:]) + 1]
+
+        if prevalent_class == 4:
+            # Superficial
+            cv2.drawContours(superficial, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+        elif prevalent_class == 5:
+            # Intermediate
+            cv2.drawContours(intermediate, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+        elif prevalent_class == 6:
+            # Suspected
+            cv2.drawContours(suspected, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+        elif prevalent_class == 7:
+            # Binucleation
+            cv2.drawContours(binucleation, contours=[contour], contourIdx=-1, color=127, thickness=cv2.FILLED)
+
+    # Replace the original classes with the reclassified ones
+    prediction[:, :, 4] = superficial
+    prediction[:, :, 5] = intermediate
+    prediction[:, :, 6] = suspected
+    prediction[:, :, 7] = binucleation
+
+    return prediction
