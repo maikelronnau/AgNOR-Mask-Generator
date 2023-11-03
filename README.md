@@ -34,7 +34,7 @@ Make sure the model file you want to use matches the `MODEL_PATH` value in the `
 ### Run the main script
 
 ```console
-python agnor_slide_image_examiner.py
+python main.py
 ```
 
 ### Compile the standalone executable
