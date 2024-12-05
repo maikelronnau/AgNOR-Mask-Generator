@@ -7,8 +7,8 @@ import PySimpleGUI as sg
 from utils.utils import ROOT_PATH, format_combobox_string
 
 
-PROGRAM_NAME = "AgNOR Slide-Image Examiner"
-PROGRAM_TITLE = "Select images to count nuclei and AgNOR"
+PROGRAM_NAME = "Papanicolaou Slide-Image Examiner"
+PROGRAM_TITLE = "Select images to count clusters and cells"
 TITLE_FONT = ("Arial", "14", "bold")
 MAIN_FONT = ("Arial", "10", "bold")
 SECONDARY_FONT = ("Arial", "10")
@@ -24,7 +24,6 @@ TOOLTIPS = {
     "exam_instance": "The 'time' of the exam. For example, 'T0', 'T1', 'T2', etc.",
     "image_directory": "A directory containing images to be processed.",
     "browse": "Opens a window that allows selecting a directory to process.",
-    "classify_agnor": "Classify AgNORs in clusters or satellites.",
     "inspect_with_labelme": "After processing, opens Labelme for inspection of the results.",
     "bbox": "Restricts processing to nuclei within bounding boxes.",
     "overlay": "Generates an overlay of the input image and the predicted segmentation.",
@@ -47,7 +46,6 @@ def clear_fields(window: sg.Window):
     window["-EXAM-DATE-"]("")
     window["-EXAM-INSTANCE-"]("")
     window["-INPUT-DIRECTORY-"]("")
-    window["-CLASSIFY-AGNOR-"](False)
     window["-OPEN-LABELME-"](False)
     window["-USE-BOUNDING-BOXES-"](False)
     window["-GENERATE-OVERLAY-"](False)
@@ -80,7 +78,7 @@ def get_special_elements() -> Tuple[sg.Element]:
     patient_group = sg.In(size=(50, 1), key="-PATIENT-GROUP-", tooltip=TOOLTIPS["patient_group"])
     anatomical_site = sg.In(size=(50, 1), key="-ANATOMICAL-SITE-", tooltip=TOOLTIPS["anatomical_site"], pad=((5, 5), (6, 5)))
     databases = sg.In(size=(133, 1), key="-DATABASE-", tooltip=TOOLTIPS["database"], pad=((9, 0), (25, 0)))
-    
+
     if Path(CONFIG_FILE).is_file():
         with open(CONFIG_FILE, "r") as config_file:
             configs = config_file.readlines()
@@ -175,7 +173,6 @@ def get_layout() -> List[list]:
             sg.Text("\n\nAdvanced options", text_color="white", font=MAIN_FONT)
         ],
         [
-            sg.Checkbox("Classify AgNOR", default=False, text_color="white", key="-CLASSIFY-AGNOR-", font=SECONDARY_FONT, tooltip=TOOLTIPS["classify_agnor"]),
             sg.Checkbox("Inspect results with Labelme", default=False, text_color="white", key="-OPEN-LABELME-", font=SECONDARY_FONT, tooltip=TOOLTIPS["inspect_with_labelme"]),
             sg.Checkbox("Restrict processing to bounding boxes", default=False, text_color="white", enable_events=True, key="-USE-BOUNDING-BOXES-", font=SECONDARY_FONT, tooltip=TOOLTIPS["bbox"]),
             sg.Checkbox("Generate segmentation overlay", default=False, text_color="white", key="-GENERATE-OVERLAY-", font=SECONDARY_FONT, tooltip=TOOLTIPS["overlay"]),

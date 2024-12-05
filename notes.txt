@@ -1,0 +1,10 @@
+Install CUDA, cuDNN, and Python natively
+Pip install dependencies
+
+pip install tensorflow-gpu==2.10.0 segmentation-models==1.0.1 pysimplegui==4.60.5.0 opencv-python==4.5.1.48 opencv-python-headless==4.5.2.54 pillow pandas scikit-image scikit-learn scipy tqdm joblib imgviz
+
+
+Samples to run
+python main.py --console --debug --model Papanicolaou_e008_l0.0828_vl0.3078.h5 --overlay --database 16-10-2023.csv --input-directory "16-10-2023/voc/168 DPMB/images/" --patient "Patient 168" --patient-record 168 --patient-group DPMB --reclassify --use-bias-layer --remove-artifacts
+
+python main.py --debug

@@ -16,36 +16,6 @@ from utils.utils import (color_classes, convert_bbox_to_contour,
                          get_labelme_points, reset_class_values)
 
 
-NUCLEUS_COLUMNS = [
-    "patient_record",
-    "patient_name",
-    "source_image",
-    "flag",
-    "group",
-    "exam_date",
-    "exam_instance",
-    "anatomical_site",
-    "nucleus",
-    "nucleus_pixel_count",
-    "type"]
-
-AGNOR_COLUMNS = [
-    "patient_record",
-    "patient_name",
-    "source_image",
-    "flag",
-    "group",
-    "exam_date",
-    "exam_instance",
-    "anatomical_site",
-    "nucleus",
-    "agnor",
-    "agnor_pixel_count",
-    "type",
-    "nucleus_ratio",
-    "greatest_agnor_ratio",
-    "smallest_agnor_ratio"]
-
 CLASSES = [
     "control",
     "leukoplakia",
@@ -258,10 +228,11 @@ def discard_contours_without_contours(
 
 def discard_contours_outside_contours(
     parent_contours: List[np.ndarray],
-    child_contours: List[np.ndarray]) -> Union[List[np.ndarray], List[np.ndarray]]:
+    child_contours: List[np.ndarray],
+    method="point") -> Union[List[np.ndarray], List[np.ndarray]]:
     """Discards contours that are outside other contours.
 
-    This function iterates over all child contours and checks if at least one point is inside of at least one parent contour.
+    This function iterates over all child contours and checks if at least 50% of the area is inside of at least one parent contour.
 
     Args:
         parent_contours (List[np.ndarray]): The list of contours to be considered as the parent contours.
@@ -272,19 +243,36 @@ def discard_contours_outside_contours(
     """
     kept = []
     discarded = []
-    for child in child_contours:
-        keep_child = False
-        for parent in parent_contours:
-            for child_point in child:
-                if cv2.pointPolygonTest(parent, tuple(child_point[0]), False) >= 0:
+    
+    if method == "point":
+        for child in child_contours:
+            keep_child = False
+            for parent in parent_contours:
+                for child_point in child:
+                    if cv2.pointPolygonTest(parent, tuple(child_point[0]), False) >= 0:
+                        keep_child = True
+                        break
+                if keep_child:
+                    break
+            if keep_child:
+                kept.append(child)
+            else:
+                discarded.append(child)
+    elif method == "intersection":
+        kept = []
+        discarded = []
+        for child in child_contours:
+            keep_child = False
+            child_area = cv2.contourArea(child)
+            for parent in parent_contours:
+                intersection = cv2.intersectConvexConvex(parent, child)
+                if intersection[0] >= 0.5 * child_area:
                     keep_child = True
                     break
             if keep_child:
-                break
-        if keep_child:
-            kept.append(child)
-        else:
-            discarded.append(child)
+                kept.append(child)
+            else:
+                discarded.append(child)
     return kept, discarded
 
 
@@ -464,7 +452,7 @@ def get_contour_measurements(
         start_index_parent (Optional[int], optional): The index to start the parent contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
         start_index_child (Optional[int], optional): The index to start the child contour ID assignment. Usually it will not be `0` when discarded records are being measure for record purposes. Defaults to 0.
     Returns:
-        Union[List[dict], List[dict], int, int]: The parent and child contours, and the pixel count of the smallest and biggest AgNOR.
+        Union[List[dict], List[dict], int, int]: The parent and child contours, and the pixel count of the smallest and biggest nucleus.
     """
     parent_measurements = []
     child_measurements = []
@@ -516,210 +504,198 @@ def write_contour_measurements(
 
 
 def aggregate_measurements(
-    nucleus_measurements: str,
-    agnor_measurements: str,
+    cluster_cytoplasm_anucleate_measurements: str,
+    nuclei_measurements: str,
     remove_measurement_files: Optional[bool] = False,
     database: Optional[str] = None,
     datetime: Optional[str] = time.strftime('%Y%m%d%H%M')) -> bool:
-    """Reads, aggregates, and saves the nuclei and AgNOR measurements.
+    """Reads, aggregates, and saves the Papanicolaou measurements.
 
     Args:
-        nucleus_measurements (str): Path to the .csv file containing the nuclei measurements.
-        agnor_measurements (str): Path to the .csv file containing the AgNORs measurements.
-        remove_measurement_files (Optional[bool], optional): Whether or not to remove the measurement files used for aggregation. Defaults to False.
+        cluster_cytoplasm_anucleate_measurements (str): Path to the .csv file containing the clusters, cytoplasm and anucleate measurements.
+        nuclei_measurements (str): Path to the .csv file containing the nuclei measurements.
+        remove_measurement_files (Optional[bool], optional): Whether or not to delete the measurement files used for aggregation. Defaults to False.
         database (Optional[str], optional): What file to save records to. Defaults to None.
         datetime (Optional[str], optional): A date and time identification for when the file was generated. Defaults to time.strftime('%Y%m%d%H%M%S').
     Returns:
         bool: `True` if function succeed otherwise `False`.
     """
-    # Patient,NNA1,NNA2,NNA3,NNA4,NNA5+,NNA1%,NNA2%,NNA3%,NNA4%,NNA5+%,Number of Nucleus, Number of AgNORs,Number of Clusters,Number of Satellites,Mean Nucleus Size (Pixels),Mean AgNOR Size (Pixels),Mean Cluster Size (Pixels),Mean Satellite (Pixels)
-    if Path(nucleus_measurements).is_file():
-        df_nucleus = pd.read_csv(nucleus_measurements)
-    else:
-        logging.debug(f"Base measurement file '{nucleus_measurements}' not found")
+    try:
+        # Read the CSV files
+        cluster_df = pd.read_csv(cluster_cytoplasm_anucleate_measurements)
+        nuclei_df = pd.read_csv(nuclei_measurements)
+
+        # Initialize the aggregation dictionary
+        aggregation = {}
+
+        # Aggregate nuclei data
+        for _, row in nuclei_df.iterrows():
+            patient = row["patient_record"]
+            if patient not in aggregation:
+                aggregation[patient] = {
+                    "Paciente": patient,
+                    "Aglomerado": 0,
+                    "Aglomerado Maligno": 0,
+                    "Citoplamas": 0,
+                    "Escamas": 0,
+                    "Núcleo Superficial": 0,
+                    "Núcleo Intermediário": 0,
+                    "Núcleo Suspeito": 0,
+                    "Tamanho Médio Aglomerado (pixels)": 0,
+                    "Tamanho Médio Aglomerado Maligno (pixels)": 0,
+                    "Tamanho Médio Citoplamas (pixels)": 0,
+                    "Tamanho Médio Escamas (pixels)": 0,
+                    "Tamanho Médio Núcleo Superficial (pixels)": 0,
+                    "Tamanho Médio Núcleo Intermediário (pixels)": 0,
+                    "Tamanho Médio Núcleo Suspeito (pixels)": 0
+                }
+
+            # Update nuclei counts and sizes
+            if row["type"] == "superficial":
+                aggregation[patient]["Núcleo Superficial"] += 1
+                aggregation[patient]["Tamanho Médio Núcleo Superficial (pixels)"] += row["nucleus_pixel_count"]
+            elif row["type"] == "intermediaria":
+                aggregation[patient]["Núcleo Intermediário"] += 1
+                aggregation[patient]["Tamanho Médio Núcleo Intermediário (pixels)"] += row["nucleus_pixel_count"]
+            elif row["type"] == "suspeita":
+                aggregation[patient]["Núcleo Suspeito"] += 1
+                aggregation[patient]["Tamanho Médio Núcleo Suspeito (pixels)"] += row["nucleus_pixel_count"]
+
+
+        # Aggregate cluster data
+        for _, row in cluster_df.iterrows():
+            patient = row["patient_record"]
+            if patient not in aggregation:
+                continue  # Skip if patient not in nuclei data
+
+            # Update cluster counts and sizes
+            if row["type"] == "aglomerado":
+                aggregation[patient]["Aglomerado"] += 1
+                aggregation[patient]["Tamanho Médio Aglomerado (pixels)"] += row["cluster_pixel_count"]
+            elif row["type"] == "aglomerado_maligno":
+                aggregation[patient]["Aglomerado Maligno"] += 1
+                aggregation[patient]["Tamanho Médio Aglomerado Maligno (pixels)"] += row["cluster_pixel_count"]
+            elif row["type"] == "citoplasma":
+                aggregation[patient]["Citoplamas"] += 1
+                aggregation[patient]["Tamanho Médio Citoplamas (pixels)"] += row["cluster_pixel_count"]
+            elif row["type"] == "escama":
+                aggregation[patient]["Escamas"] += 1
+                aggregation[patient]["Tamanho Médio Escamas (pixels)"] += row["cluster_pixel_count"]
+
+
+        # Calculate average sizes
+        for patient, data in aggregation.items():
+            if data["Núcleo Superficial"] > 0:
+                data["Tamanho Médio Núcleo Superficial (pixels)"] /= data["Núcleo Superficial"]
+            if data["Núcleo Intermediário"] > 0:
+                data["Tamanho Médio Núcleo Intermediário (pixels)"] /= data["Núcleo Intermediário"]
+            if data["Núcleo Suspeito"] > 0:
+                data["Tamanho Médio Núcleo Suspeito (pixels)"] /= data["Núcleo Suspeito"]
+            if data["Aglomerado"] > 0:
+                data["Tamanho Médio Aglomerado (pixels)"] /= data["Aglomerado"]
+            if data["Aglomerado Maligno"] > 0:
+                data["Tamanho Médio Aglomerado Maligno (pixels)"] /= data["Aglomerado Maligno"]
+            if data["Citoplamas"] > 0:
+                data["Tamanho Médio Citoplamas (pixels)"] /= data["Citoplamas"]
+            if data["Escamas"] > 0:
+                data["Tamanho Médio Escamas (pixels)"] /= data["Escamas"]
+
+        aggregation[patient]["Tamanho Médio Aglomerado (pixels)"] = round(aggregation[patient]["Tamanho Médio Aglomerado (pixels)"], 4)
+        aggregation[patient]["Tamanho Médio Aglomerado Maligno (pixels)"] = round(aggregation[patient]["Tamanho Médio Aglomerado Maligno (pixels)"], 4)
+        aggregation[patient]["Tamanho Médio Citoplamas (pixels)"] = round(aggregation[patient]["Tamanho Médio Citoplamas (pixels)"], 4)
+        aggregation[patient]["Tamanho Médio Escamas (pixels)"] = round(aggregation[patient]["Tamanho Médio Escamas (pixels)"], 4)
+        aggregation[patient]["Tamanho Médio Núcleo Superficial (pixels)"] = round(aggregation[patient]["Tamanho Médio Núcleo Superficial (pixels)"], 4)
+        aggregation[patient]["Tamanho Médio Núcleo Intermediário (pixels)"] = round(aggregation[patient]["Tamanho Médio Núcleo Intermediário (pixels)"], 4)
+        aggregation[patient]["Tamanho Médio Núcleo Suspeito (pixels)"] = round(aggregation[patient]["Tamanho Médio Núcleo Suspeito (pixels)"], 4)
+
+
+        # Add n counts per n type
+        cluster_df.rename(columns={"cluster": "parent_id"}, inplace=True)
+        cluster_df.rename(columns={"type": "parent_type"}, inplace=True)
+
+        nuclei_df.rename(columns={"cluster_cytoplasm_anucleate": "parent_id"}, inplace=True)
+        nuclei_df.rename(columns={"nucleus": "child_id"}, inplace=True)
+        nuclei_df.rename(columns={"type": "child_type"}, inplace=True)
+
+        cluster_df_columns = ["patient_name", "source_image", "parent_id", "parent_type"]
+        nuclei_df_columns = ["patient_name", "source_image", "parent_id", "child_id", "child_type"]
+
+        cluster_df = cluster_df[cluster_df_columns]
+        nuclei_df = nuclei_df[nuclei_df_columns]
+
+        cluster_df.reset_index(drop=True, inplace=True)
+        nuclei_df.reset_index(drop=True, inplace=True)
+
+        nuclei_df = nuclei_df.merge(cluster_df, on=["patient_name", "source_image", "parent_id"], how="left")
+
+        counts = nuclei_df.groupby(["patient_name", "source_image", "parent_id", "parent_type", "child_type"]).size().reset_index(name="count")
+
+        for parent_type in ["aglomerado", "aglomerado_maligno"]:
+            for child_type in ["superficial", "intermediaria", "suspeita"]:
+                for n in range(1, 6):
+                    if n == 5:
+                        df = counts[counts["count"] >= n]
+                    else:
+                        df = counts[counts["count"] == n]
+                    df = df[df["parent_type"] == parent_type]
+                    df = df[df["child_type"] == child_type]
+                    column_name = f"{parent_type.replace('_', ' ').capitalize()} {n}{'+' if n == 5 else ''} {child_type.title()}"
+
+                    if child_type == "intermediaria":
+                        column_name = column_name.replace("Intermediaria", "Intermediária")
+                    if child_type == "suspeita":
+                        column_name = column_name.replace("Suspeita", "Suspeito")
+
+                    aggregation[patient][column_name] = df.shape[0]
+
+        # Convert aggregation dictionary to DataFrame
+        aggregated_df = {k: v for k, v in aggregation.items() if isinstance(v, dict)}
+
+        # Create DataFrame from the nested dictionary
+        aggregated_df = pd.DataFrame.from_dict(aggregated_df, orient='index')
+
+        # Add the string as a new column to the DataFrame
+        aggregated_df["datetime"] = datetime
+
+        # Save to database if specified
+        if database:
+            if os.path.exists(database):
+                existing_df = pd.read_csv(database)
+                aggregated_df = pd.concat([existing_df, aggregated_df], ignore_index=True)
+            aggregated_df.to_csv(database, index=False, header=True)
+
+        # Remove measurement files if specified
+        if remove_measurement_files:
+            os.remove(nuclei_measurements)
+            os.remove(cluster_cytoplasm_anucleate_measurements)
+
+        return True
+    except Exception as e:
+        print(f"An error occurred: {e}")
         return False
-    if Path(agnor_measurements).is_file():
-        df_agnor = pd.read_csv(agnor_measurements)
-    else:
-        logging.debug(f"Base measurement file '{nucleus_measurements}' not found")
-        return False
-
-    number_of_nucleus = len(df_nucleus)
-    number_of_agnors = len(df_agnor)
-    number_of_clusters = len(df_agnor[df_agnor["type"] == "cluster"])
-    number_of_satellites = len(df_agnor[df_agnor["type"] == "satellite"])
-
-    agnor_central_measurements = df_agnor[df_agnor["type"].str.contains("cluster|satellite")].groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
-    mean_agnor_per_nucleus = round(agnor_central_measurements["agnor"].mean(), 2)
-    median_agnor_per_nucleus = round(agnor_central_measurements["agnor"].median(), 2)
-
-    mean_nucleus_size = round(df_nucleus["nucleus_pixel_count"].mean(), 2)
-    mean_agnor_size = round(df_agnor["agnor_pixel_count"].mean(), 2)
-    mean_cluster_size = round(df_agnor[df_agnor["type"] == "cluster"]["agnor_pixel_count"].mean(), 2)
-    mean_satellite_size = round(df_agnor[df_agnor["type"] == "satellite"]["agnor_pixel_count"].mean(), 2)
-
-    n_nuclei_with_n_agnors = df_agnor.groupby(["source_image", "nucleus"])["agnor"].count().reset_index()
-    n_nuclei_with_n_agnors = n_nuclei_with_n_agnors.groupby(["agnor"]).size().reset_index(name="count")
-
-    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 1]["count"]) > 0:
-        nna1 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 1]["count"].iloc[0]
-    else:
-        nna1 = 0
-    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 2]["count"]) > 0:
-        nna2 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 2]["count"].iloc[0]
-    else:
-        nna2 = 0
-    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 3]["count"]) > 0:
-        nna3 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 3]["count"].iloc[0]
-    else:
-        nna3 = 0
-    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 4]["count"]) > 0:
-        nna4 = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] == 4]["count"].iloc[0]
-    else:
-        nna4 = 0
-    if len(n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] >= 5]["count"]) > 0:
-        nna5_plus = n_nuclei_with_n_agnors[n_nuclei_with_n_agnors["agnor"] >= 5]["count"].sum()
-    else:
-        nna5_plus = 0
-
-    if number_of_nucleus > 0:
-        nna1_percent = round(nna1 / number_of_nucleus, 2)
-        nna2_percent = round(nna2 / number_of_nucleus, 2)
-        nna3_percent = round(nna3 / number_of_nucleus, 2)
-        nna4_percent = round(nna4 / number_of_nucleus, 2)
-        nna5_plus_percent = round(nna5_plus / number_of_nucleus, 2)
-    else:
-        nna1_percent = 0
-        nna2_percent = 0
-        nna3_percent = 0
-        nna4_percent = 0
-        nna5_plus_percent = 0
-
-    record = {
-        "Record": [df_agnor["patient_record"].iloc[0]],
-        "Patient Name": [df_agnor["patient_name"].iloc[0]],
-        "ExamDate": [df_agnor["exam_date"].iloc[0]],
-        "Exam Instance": [df_agnor["exam_instance"].iloc[0]],
-        "Anatomical Site": [df_agnor["anatomical_site"].iloc[0]],
-        "Group": df_agnor["group"].unique()[0],
-        "Number of Nuclei": [number_of_nucleus],
-        "Number of AgNORs": [number_of_agnors],
-        "Number of Clusters": [number_of_clusters],
-        "Number of Satellites": [number_of_satellites],
-        "Mean AgNOR per Nucleus": mean_agnor_per_nucleus,
-        "Median AgNOR per Nucleus": median_agnor_per_nucleus,
-        "Mean Nucleus Size": [mean_nucleus_size],
-        "Mean AgNOR Size": [mean_agnor_size],
-        "Mean Cluster Size": [mean_cluster_size],
-        "Mean Satellite Size": [mean_satellite_size],
-        "AgNOR = 1": [nna1],
-        "AgNOR = 2": [nna2],
-        "AgNOR = 3": [nna3],
-        "AgNOR = 4": [nna4],
-        "AgNOR = 5+": [nna5_plus],
-        "AgNOR = 1%": nna1_percent,
-        "AgNOR = 2%": nna2_percent,
-        "AgNOR = 3%": nna3_percent,
-        "AgNOR = 4%": nna4_percent,
-        "AgNOR = 5%+": nna5_plus_percent
-    }
-
-    df = pd.DataFrame.from_dict(record)
-    output_path = str(Path(nucleus_measurements).parent.joinpath(f"{datetime} - Aggregate measurements - {record['Patient Name'][0]}.csv"))
-    df.to_csv(output_path, mode="w", header=True, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
-
-    if remove_measurement_files:
-        if Path(nucleus_measurements).is_file():
-            try:
-                os.remove(nucleus_measurements)
-            except Exception:
-                logging.debug(f"Could not remove file {nucleus_measurements}")
-        if Path(agnor_measurements).is_file():
-            try:
-                os.remove(agnor_measurements)
-            except Exception:
-                logging.debug(f"Could not remove file {agnor_measurements}")
-
-    if database is not None and database != "":
-        if not database.endswith(".csv"):
-            database = f"{database}.csv"
-        if Path(database).is_file():
-            df.to_csv(database, mode="a", header=False, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
-        else:
-            df.to_csv(database, mode="w", header=True, index=False, sep=";", decimal=",", quoting=csv.QUOTE_NONNUMERIC)
-
-    return True
-
-
-def classify_agnor(model_path: str, contours: List[np.ndarray]) -> List[np.ndarray]:
-    """Loads a Scikit-Learn model and classify the input arrays in `clusters` and `satellites`.
-    Args:
-        model_path (str): Path to the model file.
-        contours (List[np.ndarray]): Input array containing the features `agnor_pixel_count`, `nucleus_ratio`, `smallest_agnor_ratio`, `greatest_agnor_ratio`."
-    Returns:
-        List[np.ndarray]: Updated array with a column containing the predicted class of each element in the input array, where `0` corresponds to `cluster` and `1` to `satellite`.
-    """
-    if len(contours) == 0:
-        return contours
-
-    features_list = [
-        "agnor_pixel_count",
-        "nucleus_ratio",
-        "smallest_agnor_ratio",
-        "greatest_agnor_ratio"
-    ]
-
-    df = pd.DataFrame.from_dict(contours)
-    features = df[features_list].copy()
-
-    classifier = joblib.load(model_path)
-    predictions = classifier.predict(features)
-    df["type"] = predictions
-
-    contours = list(df.T.to_dict().values())
-    return contours
 
 
 def discard_unboxed_contours(
-    prediction: Union[np.ndarray, tf.Tensor],
-    parent_contours: List[np.ndarray],
-    child_contours: List[np.ndarray],
+    contours: Union[np.ndarray, tf.Tensor],
     annotation: str) -> Tuple[Union[np.ndarray, tf.Tensor], np.ndarray, np.ndarray]:
-    """Zero pixels that are not contained by a bounding box.
+    """Discard contours that are not inside the bounding box of the annotation.
 
     Args:
-        prediction (Union[np.ndarray, tf.Tensor]): Predicted segmentation.
-        parent_contours (List[np.ndarray]): The parent contours.
-        child_contours (List[np.ndarray]): The child contours.
-        annotation (str): Path to the `labelme` annotation file.
+        contours (Union[np.ndarray, tf.Tensor]): The contours to be evaluated.
+        annotation (str): The annotation to be used as the bounding box.
 
     Returns:
-        Tuple[Union[np.ndarray, tf.Tensor], np.ndarray, np.ndarray]: Updated segmentation mask and contour arrays containing only objects within bounding boxes.
+        Tuple[Union[np.ndarray, tf.Tensor], np.ndarray, np.ndarray]: The updated contours, the contours that were kept, and the contours that were discarded.
     """
-    if prediction is not None:
-        bboxes = get_labelme_points(annotation, shape_types=["rectangle"])
+    bboxes = get_labelme_points(annotation, shape_types=["rectangle"])
 
-        # Convert bboxes into contours with four points.
-        for i in range(len(bboxes)):
-            bboxes[i] = convert_bbox_to_contour(bboxes[i].tolist())
+    # Convert bboxes into contours with four points.
+    for i in range(len(bboxes)):
+        bboxes[i] = convert_bbox_to_contour(bboxes[i].tolist())
 
-        parent_contours, _ = discard_contours_outside_contours(bboxes, parent_contours)
-        child_contours, _ = discard_contours_outside_contours(parent_contours, child_contours)
+    remaining_contours, discarded_contours = discard_contours_outside_contours(bboxes, contours)
 
-        # Create a new mask with the filtered nuclei and NORs
-        pixel_intensity = int(np.max(np.unique(prediction)))
-        background = np.ones(prediction.shape[:2], dtype=np.uint8)
-        nucleus = np.zeros(prediction.shape[:2], dtype=np.uint8)
-        nor = np.zeros(prediction.shape[:2], dtype=np.uint8)
-
-        cv2.drawContours(nucleus, contours=parent_contours, contourIdx=-1, color=pixel_intensity, thickness=cv2.FILLED)
-        cv2.drawContours(nor, contours=child_contours, contourIdx=-1, color=pixel_intensity, thickness=cv2.FILLED)
-
-        nucleus = np.where(nor, 0, nucleus)
-        background = np.where(np.logical_and(nucleus == 0, nor == 0), pixel_intensity, 0)
-        prediction = np.stack([background, nucleus, nor], axis=2).astype(np.uint8)
-
-    return prediction, parent_contours, child_contours
+    return remaining_contours, discarded_contours
 
 
 def adjust_probability(prediction: np.ndarray) -> np.ndarray:

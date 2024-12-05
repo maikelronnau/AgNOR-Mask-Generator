@@ -27,8 +27,8 @@ def one_hot_encode(image: Union[np.ndarray, tf.Tensor], classes: int, as_numpy: 
     """
     if isinstance(image, np.ndarray):
         one_hot_encoded = np.zeros(image.shape[:2] + (classes,), dtype=np.uint8)
-        for i, unique_value in enumerate(np.unique(image)):
-            one_hot_encoded[:, :, i][image == unique_value] = 1
+        for unique_value in enumerate(np.unique(image)):
+            one_hot_encoded[:, :, unique_value][image == unique_value] = 1
         return one_hot_encoded
     elif isinstance(image, tf.Tensor):
         image = tf.cast(image, dtype=tf.int32)
@@ -44,12 +44,32 @@ def one_hot_encode(image: Union[np.ndarray, tf.Tensor], classes: int, as_numpy: 
         raise TypeError(f"Argument `image` should be `np.ndarray` or `tf.Tensor. Given `{type(image)}`.")
 
 
+def normalize_image(image: tf.Tensor) -> tf.Tensor:
+    """Normalize image in range [0, 1].
+
+    Args:
+        image (tf.Tensor): The imput image.
+
+    Returns:
+        tf.Tensor: Normalized image.
+    """
+    image = tf.cast(image, dtype=tf.float32)
+
+    min = tf.reduce_min(image)
+    max = tf.reduce_max(image)
+
+    image = (image - min) / (max - min)
+
+    return image
+
+
 def load_image(
     image_path: Union[str, tf.Tensor],
     shape: Tuple[int, int] = None,
     normalize: Optional[bool] = False,
     as_gray: Optional[bool] = False,
-    as_numpy: Optional[bool] = False) -> tf.Tensor:
+    as_numpy: Optional[bool] = False,
+    return_original_shape: Optional[bool] = False) -> tf.Tensor:
     """Read an image from the storage media.
 
     Args:
@@ -58,6 +78,7 @@ def load_image(
         normalize (Optional[bool], optional): Whether or not to put the image values between zero and one ([0,1]). Defaults to False.
         as_gray (Optional[bool], optional): Whether or not to read the image in grayscale. Defaults to False.
         as_numpy: (Optional[bool], optional): Whether to return the listed files as Numpy comparable objects.
+        return_original_shape: (Optional[bool], optional): Whether to return the original shape of the image. Defaults to False.
 
     Raises:
         TypeError: If the image type is not supported.
@@ -67,6 +88,8 @@ def load_image(
     Returns:
         tf.Tensor: The read image.
     """
+    original_shape = None
+
     if isinstance(image_path, str):
         image_path = Path(image_path)
 
@@ -79,18 +102,26 @@ def load_image(
 
                 if image_path.suffix in [".tif", ".tiff"]:
                     image = imread(str(image_path), as_gray=as_gray)
+                    original_shape = image.shape
                     image = tf.convert_to_tensor(image, dtype=tf.float32)
+                elif image_path.suffix in [".bmp", ".BMP"]:
+                        image = tf.io.read_file(str(image_path))
+                        image = tf.image.decode_bmp(image, channels=channels)
+                        original_shape = tuple(image.shape.as_list())
                 else:
                     image = tf.io.read_file(str(image_path))
                     image = tf.image.decode_png(image, channels=channels)
+                    original_shape = tuple(image.shape.as_list())
 
                 if shape:
                     if shape != image.shape[:2]:
-                        image = tf.image.resize(image, shape, method="nearest")
+                        if "mask" in image_path.stem:
+                            image = tf.image.resize(image, shape, method="nearest")
+                        else:
+                            image = tf.image.resize(image, shape, method="bilinear")
 
                 if normalize:
-                    image = tf.cast(image, dtype=tf.float32)
-                    image = image / 255.
+                    image = normalize_image(image)
 
                 if as_numpy:
                     image = image.numpy()
@@ -98,25 +129,33 @@ def load_image(
                     if as_gray:
                         image = image[:, :, 0]
 
-                return image
+                if return_original_shape:
+                    return image, original_shape
+                else:
+                    return image
         else:
             raise FileNotFoundError(f"The file `{image_path}` was not found.")
-    elif isinstance(image_path, tf.Tensor) or isinstance(image_path, bytes):
+    elif isinstance(image_path, tf.Tensor):
         channels = 1 if as_gray else 3
         image = tf.io.read_file(image_path)
         image = tf.image.decode_png(image, channels=channels)
 
-        if shape is not None:
-            if shape[0] != image.shape[0] or shape[1] != image.shape[1]:
+        original_shape = tuple(image.shape.as_list())
+
+        if shape:
+            if shape != image.shape[:2]:
                 image = tf.image.resize(image, shape, method="nearest")
 
         if normalize:
             image = tf.cast(image, dtype=tf.float32)
             image = image / 255.
 
-        return image
+        if return_original_shape:
+            return image, original_shape
+        else:
+            return image
     else:
-        raise TypeError(f"Object `{image_path}` is not supported.")
+        raise TypeError("Object `{image_path}` is not supported.")
 
 
 def list_files(
@@ -129,7 +168,6 @@ def list_files(
     Args:
         files_path (str): The path to the directory containing the files to be listed.
         as_numpy: (Optional[bool], optional): Whether to return the listed files as Numpy comparable objects.
-        file_types (Optional[list], optional): List of file types to list. Defaults to `SUPPORTED_IMAGE_TYPES`.
         seed (Optional[int], optional): A seed used to shuffle the listed files. Note: If listing images and segmentation masks, the same seed must be used. Defaults to 1234.
 
     Raises:
@@ -153,122 +191,3 @@ def list_files(
         return files_list
     else:
         raise FileNotFoundError(f"The directory `{files_path}` does not exist.")
-
-
-def load_dataset_files(
-    image_path: Union[str, tf.Tensor],
-    mask_path: Union[str, tf.Tensor],
-    shape: Tuple[int, int],
-    classes: int,
-    mask_one_hot_encoded: Optional[bool] = True) -> Tuple[tf.Tensor, tf.Tensor]:
-    """Load an image and a segmentation mask.
-
-    Args:
-        image_path (Union[str, tf.string, tf.Tensor]): The path to the image file.
-        mask_path (Union[str, tf.string, tf.Tensor]): The path to the mask file.
-        shape (Tuple[int, int]): The shape the loaded images and mask should have, in the format (HEIGHT, WIDTH).
-        classes (int): The number of classes contained in the segmentation mask. It affects the one-hot-encoding of the mask.
-        mask_one_hot_encoded (Optional[bool], optional): Whether or not to one-hot-encode the segmentation mask. Defaults to True.
-
-    Returns:
-        Tuple[tf.Tensor, tf.Tensor]: The loaded image and mask.
-    """
-    image = load_image(image_path, shape=shape, normalize=True)
-    mask = load_image(mask_path, shape=shape, as_gray=True)
-
-    if mask_one_hot_encoded:
-        mask = one_hot_encode(mask, classes=classes)
-
-    return image, mask
-
-
-def get_object_counts(mask_path, shape, classes):
-    mask = load_image(mask_path, shape=shape, as_gray=True)
-    mask = one_hot_encode(mask, classes=classes, as_numpy=True)
-    n_nuclei = len(get_contours(mask[:, :, 1]))
-    n_nors = len(get_contours(mask[:, :, 2]))
-    return np.array([n_nuclei, n_nors], dtype=np.int32)
-
-
-def map_shape(counts):
-    return tf.ensure_shape(counts, [2])
-
-
-def load_dataset(
-    dataset_path: str,
-    batch_size: Optional[int] = 1,
-    shape: Tuple[int, int] = (1920, 2560),
-    classes: Optional[int] = 3,
-    mask_one_hot_encoded: Optional[bool] = True,
-    repeat: Optional[bool] = False,
-    shuffle: Optional[bool] = True) -> tf.data.Dataset:
-    """Loads a `tf.data.Dataset`.
-
-    Args:
-        dataset_path (str): The path to the directory containing a subdirectory name `images` and another `masks`.
-        batch_size (Optional[int], optional): The number of elements per batch. Defaults to 1.
-        shape (Tuple[int, int], optional): The shape the loaded images should have, in the format `(HEIGHT, WIDTH)`. Defaults to (1920, 2560).
-        classes (Optional[int], optional): The number of classes in the masks. Defaults to 3.
-        mask_one_hot_encoded (Optional[bool], optional): Converts the masks to one-hot-encoded masks, where one dimension is added per class, and each dimension is a binary mask of that class. Defaults to True.
-        repeat (Optional[bool], optional): Whether the dataset should be infinite or not. Defaults to False.
-        shuffle (Optional[bool], optional): Whether to shuffle the loaded elements. Defaults to True.
-
-    Raises:
-        FileNotFoundError: In case the dataset path does not exist.
-        FileNotFoundError: In case the directory `images` under the dataset path does not exist.
-        FileNotFoundError: In case the directory `masks` under the dataset path does not exist.
-
-    Returns:
-        tf.data.Dataset: The loaded dataset.
-    """
-    dataset_path = Path(dataset_path)
-    if dataset_path.is_dir():
-        images_path = dataset_path.joinpath("images")
-        masks_path = dataset_path.joinpath("masks")
-
-        if not images_path.is_dir():
-            raise FileNotFoundError(f"The directory `{str(images_path)}` does not exist.")
-        if not masks_path.is_dir():
-            raise FileNotFoundError(f"The directory `{str(masks_path)}` does not exist.")
-
-        images_list = list_files(str(images_path), as_numpy=True)
-        masks_list = list_files(str(masks_path), as_numpy=True)
-
-        dataset = tf.data.Dataset.zip((
-            tf.data.Dataset.from_tensor_slices(images_list),
-            tf.data.Dataset.from_tensor_slices(masks_list)
-        ))
-
-        dataset = dataset.map(
-            lambda image_path, mask_path: load_dataset_files(
-                image_path=image_path,
-                mask_path=mask_path,
-                shape=shape,
-                classes=classes,
-                mask_one_hot_encoded=mask_one_hot_encoded
-            )
-        )
-
-        count_dataset = tf.data.Dataset.from_tensor_slices(masks_list)
-        count_dataset = count_dataset.map(
-            lambda mask_path: tf.numpy_function(get_object_counts, [mask_path, shape, classes], Tout=tf.int32)
-        )
-        count_dataset = count_dataset.map(map_shape)
-
-        images = dataset.map(lambda x, y: x)
-        masks = dataset.map(lambda x, y: y)
-
-        dataset = tf.data.Dataset.zip((images, {"softmax": masks, "nuclei_nor_counts": count_dataset}))
-
-        if shuffle:
-            dataset = dataset.shuffle(buffer_size=batch_size * batch_size)
-
-        if repeat:
-            dataset = dataset.repeat()
-
-        dataset = dataset.batch(batch_size)
-        dataset = dataset.prefetch(buffer_size=1)
-
-        return dataset
-    else:
-        raise FileNotFoundError(f"The directory `{str(dataset_path)}` does not exist.")

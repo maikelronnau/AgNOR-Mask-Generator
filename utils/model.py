@@ -10,6 +10,87 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 
 
+@tf.autograph.experimental.do_not_convert
+class TemperatureScaledSoftmax(tf.keras.layers.Layer):
+    """Temperature scaled Softmax layer.
+
+    This layer scales the logits of the previous layer by a temperature factor and then applies the Softmax function to the scaled logits.
+    """
+    def __init__(self, temperature=1, **kwargs):
+        # super(TemperatureScaledSoftmax, self).__init__(**kwargs)
+        super().__init__(**kwargs)
+        self.temperature = temperature
+
+    def call(self, logits):
+        logits_adjusted = logits / self.temperature
+        return tf.nn.softmax(logits_adjusted)
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'temperature': self.temperature,
+        })
+        return config
+
+
+class PapBias(tf.keras.layers.Layer):
+    """Bias the probabilities of the convolution output of a model.
+
+    This layer adds a bias to the convolution output layer of a model by increasing the probabilities of classes 4 through 7 and setting the probabilities of classes 0 through 3 to 0 where the cluster and cytoplasm masks are 1.
+    """
+    def __init__(self, **kwargs):
+        super(PapBias, self).__init__(**kwargs)
+
+    def call(self, batch):
+
+        def process(prediction):
+            # prediction_identity = tf.identity(prediction)
+            unstacked = tf.unstack(prediction, axis=-1)
+
+            # cluster = prediction_identity[:, :, 1] * 127
+            # cluster = tf.cast(cluster, tf.uint8)
+
+            # cytoplasm = prediction_identity[:, :, 2] * 127
+            # cytoplasm = tf.cast(cytoplasm, tf.uint8)
+
+            # def find_contours(mask):
+            #     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            #     return contours
+
+            # def draw_contours(mask, contours):
+            #     contours = [contour.numpy() if type(contour) != np.ndarray else contour for contour in contours]
+            #     mask = cv2.drawContours(mask, contours, contourIdx=-1, color=1, thickness=cv2.FILLED)
+            #     return mask
+
+            # cluster_contours = tf.numpy_function(find_contours, inp=[cluster], Tout=[tf.int32])
+
+            # if len(cluster_contours) > 0:
+            #     cluster_mask = tf.numpy_function(draw_contours, inp=[tf.zeros(cluster.shape, dtype=tf.uint8), cluster_contours], Tout=tf.uint8)
+            #     unstacked[0] = tf.where(tf.equal(cluster_mask, 1), 0.0, unstacked[0])
+
+            # cytoplasm_contours = tf.numpy_function(find_contours, inp=[cytoplasm], Tout=[tf.int32])
+
+            # if len(cytoplasm_contours) > 0:
+            #     cytoplasm_mask = tf.numpy_function(draw_contours, inp=[tf.zeros(cytoplasm.shape, dtype=tf.uint8), cytoplasm_contours], Tout=tf.uint8)
+            #     unstacked[0] = tf.where(tf.equal(cytoplasm_mask, 1), 0.0, unstacked[0])
+
+            # Increase the probabilities of classes 4 through 7
+            delta = tf.constant(0.001, dtype=tf.float32)
+
+            # Sum the delta to the probabilities of classes 4 through 7
+            unstacked[4] = tf.add(unstacked[4], delta)
+            unstacked[5] = tf.add(unstacked[5], delta)
+            unstacked[6] = tf.add(unstacked[6], delta)
+
+            prediction = tf.stack(unstacked, axis=-1)
+
+            return prediction
+
+        batch = tf.map_fn(process, batch)
+
+        return batch
+
+
 CUSTOM_OBJECTS = {
     "categorical_crossentropy": sm.losses.categorical_crossentropy,
     "categorical_crossentropy_plus_dice_loss": sm.losses.cce_dice_loss,
@@ -17,6 +98,8 @@ CUSTOM_OBJECTS = {
     "focal_loss": sm.losses.categorical_focal_loss,
     "f1-score": sm.metrics.f1_score,
     "iou_score": sm.metrics.iou_score,
+    "TemperatureScaledSoftmax": TemperatureScaledSoftmax,
+    "PapBias": PapBias
 }
 
 METRICS = [
@@ -43,7 +126,7 @@ def replace_model_input_shape(model: tf.keras.Model, new_input_shape: Tuple[int,
 
     Args:
         model (tf.keras.Model): The model to have its input shape replaced.
-        new_input_shape (Tuple[int, int]): The new input shape in the format `(height, width, channels)`.
+        new_input_shape (Tuple[int, int, int]): The new input shape in the format `(height, width, channels)`.
 
     Returns:
         tf.keras.Model: The model with the updated input shape.
@@ -93,9 +176,9 @@ def load_model(
         if input_shape != get_model_input_shape(model):
             model = replace_model_input_shape(model, input_shape)
 
-    if use_bias_layer:
-        x = PapBias()(model.layers[-1].output)
-        model = tf.keras.Model(inputs=model.input, outputs=x)
+    # if use_bias_layer:
+    #     x = PapBias()(model.layers[-1].output)
+    #     model = tf.keras.Model(inputs=model.input, outputs=x)
 
     if compile:
         model.compile(optimizer=optimizer, loss=loss_function, metrics=[METRICS])

@@ -14,7 +14,7 @@ from tqdm import tqdm
 from utils import user_interface
 from utils.annotation import create_annotation, update_annotation
 from utils.contour_analysis import aggregate_measurements
-from utils.data import list_files
+from utils.data import list_files, load_image
 from utils.model import load_model
 from utils.utils import (DEFAULT_MODEL_INPUT_SHAPE, MODEL_PATH,
                          collapse_probabilities, get_hash_file,
@@ -76,34 +76,6 @@ def main():
         required=False)
 
     parser.add_argument(
-        "--use-bias",
-        help="Use bias correction.",
-        default=False,
-        action="store_true",
-        required=False)
-
-    parser.add_argument(
-        "--use-bias-layer",
-        help="Use bias correction layer.",
-        default=False,
-        action="store_true",
-        required=False)
-
-    parser.add_argument(
-        "--reclassify",
-        help="Semantically reclassify segmentation.",
-        default=False,
-        action="store_true",
-        required=False)
-
-    parser.add_argument(
-        "--remove-artifacts",
-        help="Remove artifacts from segmentation.",
-        default=False,
-        action="store_true",
-        required=False)
-
-    parser.add_argument(
         "--bboxes",
         help="Use bounding boxes to restrict segmentation results.",
         default=False,
@@ -122,7 +94,7 @@ def main():
         help="Database file. A `.csv` to write the aggregate measurements to.",
         default="",
         required=False)
-    
+
     parser.add_argument(
         "--console",
         help="Enable or disable console mode. If enabled, no GUI will be displayed.",
@@ -137,10 +109,6 @@ def main():
         action="store_true")
 
     args = parser.parse_args()
-
-    if args.use_bias_layer and args.use_bias:
-        logging.warning("Both bias layer and bias were specified. ")
-        raise ValueError("Cannot use both bias and bias layer.")
 
     if args.debug:
         logging.basicConfig(
@@ -219,11 +187,6 @@ def main():
                 exam_date = values["-EXAM-DATE-"]
                 exam_instance = values["-EXAM-INSTANCE-"]
 
-                use_bias = values["-USE-BIAS-"]
-                use_bias_layer = values["-USE-BIAS-LAYER-"]
-                reclassify = values["-RECLASSIFY-"]
-                remove_artifacts = values["-REMOVE-ARTIFACTS-"]
-
                 bboxes = values["-USE-BOUNDING-BOXES-"]
                 overlay = values["-GENERATE-OVERLAY-"]
                 multiple_patients = values["-MULTIPLE-PATIENTS-"]
@@ -239,10 +202,6 @@ def main():
                 anatomical_site = args.anatomical_site
                 exam_date = args.exam_date
                 exam_instance = args.exam_instance
-                use_bias = args.use_bias
-                use_bias_layer = args.use_bias_layer
-                reclassify = args.reclassify
-                remove_artifacts = args.remove_artifacts
                 bboxes = args.bboxes
                 overlay = args.overlay
                 multiple_patients = False
@@ -284,8 +243,9 @@ def main():
                         logging.debug(f"Total of {len(annotations)} annotations found")
                         if len(annotations) == 0:
                             logging.debug("No annotations found!")
-                            status.update("No annotations found!")
-                            update_status = False
+                            if not console_mode:
+                                status.update("No annotations found!")
+                                update_status = False
                             continue
 
                         if len(images) != len(annotations):
@@ -334,14 +294,11 @@ def main():
                             else:
                                 progress_bar.update(1)
 
-                            image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-                            image_original = image.copy()
+                            image, original_shape = load_image(image_path, shape=DEFAULT_MODEL_INPUT_SHAPE[:2], normalize=True, as_numpy=True, return_original_shape=True)
+                            original_shape = original_shape[:2]
+                            image_original = image.copy() * 255
+                            image_original = cv2.resize(image_original, original_shape[::-1], interpolation=cv2.INTER_NEAREST)
                             logging.debug(f"Shape {image.shape}")
-                            original_shape = image.shape[:2]
-
-                            image = tf.cast(image, dtype=tf.float32)
-                            image = image / 255.
-                            image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
 
                             if image.shape[0] != height:
                                 image = pad_along_axis(image, size=height, axis=0)
@@ -351,7 +308,7 @@ def main():
                             image_tensor[0, :, :, :] = image
 
                             if model is None:
-                                model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE, use_bias_layer=use_bias_layer)
+                                model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE, use_bias_layer=True)
 
                             logging.debug("Predict")
                             prediction = model(image_tensor, training=False)[0].numpy()
@@ -360,8 +317,6 @@ def main():
                                 prediction = prediction[:original_shape[0], :, :]
                             if original_shape[1] != width:
                                 prediction = prediction[:, :original_shape[1], :]
-
-                            prediction = collapse_probabilities(prediction, pixel_intensity=127)
 
                             hashfile = get_hash_file(image_path)
 
@@ -377,9 +332,8 @@ def main():
                                 annotation_path=annotation_path,
                                 original_image_shape=original_shape,
                                 hashfile=hashfile,
-                                use_bias=use_bias,
-                                reclassify=reclassify,
-                                remove_artifacts=remove_artifacts,
+                                reclassify=True,
+                                remove_artifacts=True,
                                 patient_group=patient_group,
                                 exam_date=exam_date,
                                 exam_instance=exam_instance,
@@ -392,8 +346,8 @@ def main():
 
                         logging.debug(f"Aggregating measurements")
                         aggregation_result = aggregate_measurements(
-                            nucleus_measurements=str(Path(output_directory).joinpath(f"nucleus_measurements_{datetime}.csv")),
-                            agnor_measurements=str(Path(output_directory).joinpath(f"agnor_measurements_{datetime}.csv")),
+                            cluster_cytoplasm_anucleate_measurements=str(Path(output_directory).joinpath(f"cluster_cytoplasm_anucleate_{datetime}.csv")),
+                            nuclei_measurements=str(Path(output_directory).joinpath(f"nuclei_{datetime}.csv")),
                             remove_measurement_files=False,
                             database=database,
                             datetime=datetime)
@@ -457,9 +411,12 @@ def main():
                             else:
                                 progress_bar = tqdm(total=len(images), desc=f"Patient {patient}", unit="image", leave=False)
 
+                            execution_times = []
+
                             # Load and process each image
                             logging.debug("Start processing images")
                             for i, image_path in enumerate(images):
+                                start_time = time.time()
                                 logging.debug(f"Processing image {image_path}")
                                 if patient == "":
                                     key = input_directory.name
@@ -476,14 +433,11 @@ def main():
                                 else:
                                     progress_bar.update(1)
 
-                                image = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-                                image_original = image.copy()
+                                image, original_shape = load_image(image_path, shape=DEFAULT_MODEL_INPUT_SHAPE[:2], normalize=True, as_numpy=True, return_original_shape=True)
+                                original_shape = original_shape[:2]
+                                image_original = image.copy() * 255
+                                image_original = cv2.resize(image_original, original_shape[::-1], interpolation=cv2.INTER_NEAREST)
                                 logging.debug(f"Shape {image.shape}")
-                                original_shape = image.shape[:2]
-
-                                image = tf.cast(image, dtype=tf.float32)
-                                image = image / 255.
-                                image = cv2.cvtColor(np.copy(image), cv2.COLOR_BGR2RGB)
 
                                 if image.shape[0] != height:
                                     image = pad_along_axis(image, size=height, axis=0)
@@ -498,7 +452,7 @@ def main():
                                 image_tensor[0, :, :, :] = image
 
                                 if model is None:
-                                    model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE, use_bias_layer=use_bias_layer)
+                                    model = load_model(str(model_path), input_shape=DEFAULT_MODEL_INPUT_SHAPE, use_bias_layer=True)
 
                                 logging.debug("Predict")
                                 prediction = model(image_tensor, training=False)[0].numpy()
@@ -521,9 +475,9 @@ def main():
                                     source_image_path=image_path,
                                     original_image_shape=original_shape,
                                     hashfile=hashfile,
-                                    use_bias=use_bias,
-                                    reclassify=reclassify,
-                                    remove_artifacts=remove_artifacts,
+                                    use_bias=True,
+                                    reclassify=True,
+                                    remove_artifacts=True,
                                     patient_group=patient_group,
                                     exam_date=exam_date,
                                     exam_instance=exam_instance,
@@ -534,11 +488,22 @@ def main():
                                 tf.keras.backend.clear_session()
                                 logging.debug(f"Done processing image {image_path}")
 
+                                end_time = time.time()
+                                execution_time = end_time - start_time
+                                execution_times.append(execution_time)
+
+                            if len(execution_times) > 0:
+                                logging.debug(f"Average execution time: {np.mean(execution_times)}")
+                                logging.debug(f"Standard deviation: {np.std(execution_times)}")
+                                logging.debug(f"Maximum execution time: {np.max(execution_times)}")
+                                logging.debug(f"Minimum execution time: {np.min(execution_times)}")
+                                logging.debug(f"Total execution time: {np.sum(execution_times)}")
+
                             logging.debug(f"Aggregating measurements")
                             aggregation_result = aggregate_measurements(
-                                nucleus_measurements=str(output_directory.joinpath(f"nucleus_measurements_{datetime}.csv")),
-                                agnor_measurements=str(output_directory.joinpath(f"agnor_measurements_{datetime}.csv")),
-                                remove_measurement_files=True,
+                                cluster_cytoplasm_anucleate_measurements=str(output_directory.joinpath(f"cluster_cytoplasm_anucleate_{datetime}.csv")),
+                                nuclei_measurements=str(output_directory.joinpath(f"nuclei_{datetime}.csv")),
+                                remove_measurement_files=False,
                                 database=database,
                                 datetime=datetime)
                             logging.debug(f"Measurements aggregation complete")
@@ -576,7 +541,7 @@ def main():
                 update_status = True
         else:
             break
-        
+
         logging.debug("Selected directory event end")
 
     if not console_mode:
